@@ -53,6 +53,7 @@
   i/IEntity
   (merge i/IEntityDefaults
          {:hydration-keys     (constantly [:collection])
+          :types              (constantly {:name :clob, :description :clob})
           :pre-insert         pre-insert
           :pre-update         pre-update
           :pre-cascade-delete pre-cascade-delete

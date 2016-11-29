@@ -147,6 +147,7 @@
      :database_id            database-id ; these should be inferred automatically
      :table_id               table-id
      :query_type             "query"
+     :collection_id          nil
      :archived               false}
     (dissoc ((user->client :rasta) :post 200 "card" {:name                   card-name
                                                      :display                "scalar"
@@ -187,6 +188,7 @@
      :database_id            database-id ; these should be inferred from the dataset_query
      :table_id               table-id
      :query_type             "query"
+     :collection_id          nil
      :archived               false
      :labels                 []})
   ((user->client :rasta) :get 200 (str "card/" (u/get-id card))))

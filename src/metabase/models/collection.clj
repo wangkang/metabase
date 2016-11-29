@@ -43,9 +43,10 @@
 (defn perms-objects-set
   "Return the required set of permissions to READ-OR-WRITE COLLECTION-OR-ID."
   [collection-or-id read-or-write]
+  ;; This is not entirely accurate as you need to be a superuser to modifiy a collection itself (e.g., changing its name) but if you have write perms you can add/remove cards
   #{(case read-or-write
-       :read  (perms/collection-read-path collection-or-id)
-       :write (perms/collection-readwrite-path collection-or-id))})
+      :read  (perms/collection-read-path collection-or-id)
+      :write (perms/collection-readwrite-path collection-or-id))})
 
 
 (u/strict-extend (class Collection)

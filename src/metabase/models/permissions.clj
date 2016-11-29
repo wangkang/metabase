@@ -38,7 +38,9 @@
    #"^/db/(\d+)/native/read/$"                    ; permissions to read the results of existing native queries (i.e. view existing cards) for the DB
    #"^/db/(\d+)/schema/$"                         ; permissions for all schemas in the DB
    #"^/db/(\d+)/schema/([^\\/]*)/$"               ; permissions for a specific schema
-   #"^/db/(\d+)/schema/([^\\/]*)/table/(\d+)/$"]) ; permissions for a specific table
+   #"^/db/(\d+)/schema/([^\\/]*)/table/(\d+)/$"   ; permissions for a specific table
+   #"^/collection/(\d+)/$"                        ; readwrite permissions for a collection
+   #"^/collection/(\d+)/read/$"])                 ; read permissions for a collection
 
 (defn valid-object-path?
   "Does OBJECT-PATH follow a known, allowed format to an *object*?
@@ -98,6 +100,16 @@
   "Return the permissions path for a database that grants full access to all schemas."
   ^String [database-id]
   (str (object-path database-id) "schema/"))
+
+(defn collection-read-path
+  "Return the permissions path for *read* access for a COLLECTION-OR-ID."
+  ^String [collection-or-id]
+  (str "/collection/" (u/get-id collection-or-id) "/read/"))
+
+(defn collection-readwrite-path
+  "Return the permissions path for *readwrite* access for a COLLECTION-OR-ID."
+  ^String [collection-or-id]
+  (str "/collection/" (u/get-id collection-or-id) "/"))
 
 
 ;;; ---------------------------------------- Permissions Checking Fns ----------------------------------------

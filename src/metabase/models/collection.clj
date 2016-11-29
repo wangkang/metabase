@@ -1,6 +1,7 @@
 (ns metabase.models.collection
   (:require [metabase.db :as db]
-            [metabase.models.interface :as i]
+            (metabase.models [interface :as i]
+                             [permissions :as perms])
             [metabase.util :as u]))
 
 (def ^:private ^:const collection-slug-max-length
@@ -39,10 +40,21 @@
   (db/update-where! 'Card {:collection_id (u/get-id collection)}
     :collection_id nil))
 
+(defn perms-objects-set
+  "Return the required set of permissions to READ-OR-WRITE COLLECTION-OR-ID."
+  [collection-or-id read-or-write]
+  #{(case read-or-write
+       :read  (perms/collection-read-path collection-or-id)
+       :write (perms/collection-readwrite-path collection-or-id))})
+
 
 (u/strict-extend (class Collection)
   i/IEntity
   (merge i/IEntityDefaults
-         {:pre-insert         pre-insert
+         {:hydration-keys     (constantly [:collection])
+          :pre-insert         pre-insert
           :pre-update         pre-update
-          :pre-cascade-delete pre-cascade-delete}))
+          :pre-cascade-delete pre-cascade-delete
+          :can-read?          (partial i/current-user-has-full-permissions? :read)
+          :can-write?         (partial i/current-user-has-full-permissions? :write)
+          :perms-objects-set  perms-objects-set}))

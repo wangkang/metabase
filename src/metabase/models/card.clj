@@ -5,6 +5,7 @@
             [metabase.api.common :refer [*current-user-id* *current-user-permissions-set*]]
             [metabase.db :as db]
             (metabase.models [card-label :refer [CardLabel]]
+                             [collection :as collection]
                              [dependency :as dependency]
                              [interface :as i]
                              [label :refer [Label]]
@@ -75,8 +76,10 @@
   "Return a set of required permissions object paths for CARD.
    Optionally specify whether you want `:read` or `:write` permissions; default is `:read`.
    (`:write` permissions only affects native queries)."
-  [{query :dataset_query} read-or-write]
-  (query-perms-set query read-or-write))
+  [{query :dataset_query, collection-id :collection_id} read-or-write]
+  (if collection-id
+    (collection/perms-objects-set collection-id read-or-write)
+    (query-perms-set query read-or-write)))
 
 
 ;;; ------------------------------------------------------------ Dependencies ------------------------------------------------------------

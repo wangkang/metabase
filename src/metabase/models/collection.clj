@@ -17,7 +17,7 @@
 
 (defn- assert-valid-hex-color [^String hex-color]
   (when (or (not (string? hex-color))
-            (not (re-matches #"[0-9A-Fa-f]{6}" hex-color)))
+            (not (re-matches #"^[0-9A-Fa-f]{6}$" hex-color)))
     (throw (ex-info "Invalid color"
              {:status-code 400, :erros {:color "must be a valid 6-character hex color code"}}))))
 

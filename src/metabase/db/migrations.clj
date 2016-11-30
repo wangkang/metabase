@@ -15,10 +15,13 @@
             [metabase.events.activity-feed :refer [activity-feed-topics]]
             (metabase.models [activity :refer [Activity]]
                              [card :refer [Card]]
+                             [card-label :refer [CardLabel]]
+                             [collection :refer [Collection]]
                              [dashboard-card :refer [DashboardCard]]
                              [database :refer [Database]]
                              [field :refer [Field]]
                              [interface :refer [defentity]]
+                             [label :refer [Label]]
                              [permissions :refer [Permissions], :as perms]
                              [permissions-group :as perm-group]
                              [permissions-group-membership :refer [PermissionsGroupMembership], :as perm-membership]
@@ -316,3 +319,23 @@
     :base_type "type/*")
   (db/update-where! 'Field {:special_type [:not-like "type/%"]}
     :special_type nil))
+
+
+;;; +------------------------------------------------------------------------------------------------------------------------+
+;;; |                                                PEMISSIONS COLLECTIONS                                                  |
+;;; +------------------------------------------------------------------------------------------------------------------------+
+
+;; create new Collections for existing Labels, and add cards to the one of the newly created collections for them
+(defmigration ^{:author "camsaul", :added "0.22.0"} create-collections-for-labels
+  (doseq [{label-name :name, icon :icon, :as label} (db/select Label {:order-by [:%lower.name]})]
+    ;; create a new collection for the label. If label had a color, keep it, otherwise give it a neutral default
+    (println (u/format-color 'green "Creating a new collection for label '%s'..." label-name))
+    (let [collection (db/insert! Collection
+                       :name  (:name label)
+                       :color (or (second (re-matches #"^#?([0-9A-Fa-f]{6})$" icon))
+                                  "888888"))]
+      (doseq [card-label (db/select CardLabel :label_id (u/get-id label))]
+        (when-let [card (db/select-one Card :id (:card_id card-label), :collection_id nil)]
+          (println (u/format-color 'blue "Adding card '%s' to collection '%s'..." (:name card) label-name))
+          (db/update! Card (u/get-id card)
+            :collection_id (u/get-id collection)))))))

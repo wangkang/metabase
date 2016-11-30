@@ -23,7 +23,7 @@
 (api/defendpoint POST "/"
   "Create a new Collection."
   [:as {{:keys [name color description]} :body}]
-  {name su/NonBlankString, color #"[0-9A-Fa-f]{6}", description (s/maybe su/NonBlankString)}
+  {name su/NonBlankString, color #"^[0-9A-Fa-f]{6}$", description (s/maybe su/NonBlankString)}
   (api/check-superuser)
   (db/insert! Collection
     :name  name
@@ -32,7 +32,7 @@
 (api/defendpoint PUT "/:id"
   "Modify an existing Collection, including archiving or unarchiving it."
   [id, :as {{:keys [name color description archived]} :body}]
-  {name su/NonBlankString, color #"[0-9A-Fa-f]{6}", description (s/maybe su/NonBlankString), archived (s/maybe s/Bool)}
+  {name su/NonBlankString, color #"^[0-9A-Fa-f]{6}$", description (s/maybe su/NonBlankString), archived (s/maybe s/Bool)}
   ;; you have to be a superuser to modify a Collection itself, but `/collection/:id/` perms are sufficient for adding/removing Cards
   (api/check-superuser)
   (api/check-exists? Collection id)

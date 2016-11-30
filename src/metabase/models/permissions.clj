@@ -35,7 +35,7 @@
 (def ^:private ^:const valid-object-path-patterns
   [#"^/db/(\d+)/$"                                ; permissions for the entire DB -- native and all schemas
    #"^/db/(\d+)/native/$"                         ; permissions to create new native queries for the DB
-   #"^/db/(\d+)/native/read/$"                    ; permissions to read the results of existing native queries (i.e. view existing cards) for the DB
+   #"^/db/(\d+)/native/read/$"                    ; (DEPRECATED) permissions to read the results of existing native queries (i.e. view existing cards) for the DB
    #"^/db/(\d+)/schema/$"                         ; permissions for all schemas in the DB
    #"^/db/(\d+)/schema/([^\\/]*)/$"               ; permissions for a specific schema
    #"^/db/(\d+)/schema/([^\\/]*)/table/(\d+)/$"   ; permissions for a specific table
@@ -90,9 +90,10 @@
   ^String [database-id]
   (str (object-path database-id) "native/"))
 
-(defn native-read-path
+(defn ^:deprecated native-read-path
   "Return the native query *read* permissions path for a database.
-   This grants you permissions to view the results of an *existing* native query, i.e. view native Cards created by others."
+   This grants you permissions to view the results of an *existing* native query, i.e. view native Cards created by others.
+   (Deprecated because native read permissions are being phased out in favor of Collections.)"
   ^String [database-id]
   (str (object-path database-id) "native/read/"))
 
@@ -172,13 +173,15 @@
 (defn- pre-insert [permissions]
   (u/prog1 permissions
     (assert-valid permissions)
-    #_(log/info (u/format-color 'green "Granting permissions for group %d: %s" (:group_id permissions) (:object permissions)))))
+    ;; NOCOMMIT
+    (println (u/format-color 'green "Granting permissions for group %d: %s" (:group_id permissions) (:object permissions)))))
 
 (defn- pre-update [_]
   (throw (Exception. "You cannot update a permissions entry! Delete it and create a new one.")))
 
 (defn- pre-cascade-delete [permissions]
-  #_(log/info (u/format-color 'red "Revoking permissions for group %d: %s" (:group_id permissions) (:object permissions)))
+  ;; NOCOMMIT
+  (println (u/format-color 'red "Revoking permissions for group %d: %s" (:group_id permissions) (:object permissions)))
   (assert-not-admin-group permissions))
 
 
@@ -346,8 +349,9 @@
   [group-or-id database-id]
   (delete-related-permissions! group-or-id (native-readwrite-path database-id)))
 
-(defn grant-native-read-permissions!
-  "Grant native *read* permissions for GROUP-OR-ID for database with DATABASE-ID."
+(defn ^:deprecated grant-native-read-permissions!
+  "Grant native *read* permissions for GROUP-OR-ID for database with DATABASE-ID.
+   (Deprecated because native read permissions are being phased out in favor of Card Collections.)"
   [group-or-id database-id]
   (grant-permissions! group-or-id (native-read-path database-id)))
 
@@ -377,6 +381,16 @@
   [group-id database-id]
   {:pre [(integer? group-id) (integer? database-id)]}
   (grant-permissions! group-id (object-path database-id)))
+
+(defn grant-collection-readwrite-permissions!
+  "Grant full access to a Collection, which means a user can view all Cards in the Collection and add/remove Cards."
+  [group-or-id collection-or-id]
+  (grant-permissions! (u/get-id group-or-id) (collection-readwrite-path collection-or-id)))
+
+(defn grant-collection-read-permissions!
+  "Grant read access to a Collection, which means a user can view all Cards in the Collection."
+  [group-or-id collection-or-id]
+  (grant-permissions! (u/get-id group-or-id) (collection-read-path collection-or-id)))
 
 
 ;;; ---------------------------------------- Graph Updating Fns ----------------------------------------

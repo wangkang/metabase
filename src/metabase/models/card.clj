@@ -2,10 +2,10 @@
   (:require [clojure.core.memoize :as memoize]
             [clojure.tools.logging :as log]
             [medley.core :as m]
-            [metabase.api.common :refer [*current-user-id* *current-user-permissions-set*]]
+            [metabase.api.common :refer [*current-user-id* *current-user-permissions-set*], :as api]
             [metabase.db :as db]
             (metabase.models [card-label :refer [CardLabel]]
-                             [collection :as collection]
+                             [collection :refer [Collection], :as collection]
                              [dependency :as dependency]
                              [interface :as i]
                              [label :refer [Label]]
@@ -120,6 +120,7 @@
 
 
 (defn- pre-insert [{:keys [dataset_query], :as card}]
+  ;; TODO - make sure if `collection_id` is specified that we have write permissions for tha tcollection
   (u/prog1 card
     ;; for native queries we need to make sure the user saving the card has native query permissions for the DB
     ;; because users can always see native Cards and we don't want someone getting around their lack of permissions that way

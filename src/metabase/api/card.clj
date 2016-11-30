@@ -162,18 +162,26 @@
 
 (defendpoint POST "/"
   "Create a new `Card`."
-  [:as {{:keys [dataset_query description display name visualization_settings]} :body}]
+  [:as {{:keys [dataset_query description display name visualization_settings collection_id]} :body}]
   {name                   su/NonBlankString
+   description            (s/maybe su/NonBlankString)
    display                su/NonBlankString
-   visualization_settings su/Map}
+   visualization_settings su/Map
+   collection_id          (s/maybe su/IntGreaterThanZero)}
+  ;; check that we have permissions to run the query that we're trying to save
   (check-403 (perms/set-has-full-permissions-for-set? @*current-user-permissions-set* (card/query-perms-set dataset_query :write)))
+  ;; check that we have permissions for the collection we're trying to save this card to, if applicable
+  (when collection_id
+    (check-403 (perms/set-has-full-permissions? @*current-user-permissions-set* (perms/collection-readwrite-path collection_id))))
+  ;; everything is g2g, now save the card
   (->> (db/insert! Card
          :creator_id             *current-user-id*
          :dataset_query          dataset_query
          :description            description
          :display                display
          :name                   name
-         :visualization_settings visualization_settings)
+         :visualization_settings visualization_settings
+         :collection_id          collection_id)
        (events/publish-event! :card-create)))
 
 
@@ -189,19 +197,26 @@
 
 (defendpoint PUT "/:id"
   "Update a `Card`."
-  [id :as {{:keys [dataset_query description display name visualization_settings archived], :as body} :body}]
+  [id :as {{:keys [dataset_query description display name visualization_settings archived collection_id], :as body} :body}]
   {name                   (s/maybe su/NonBlankString)
    display                (s/maybe su/NonBlankString)
+   description            (s/maybe su/NonBlankString)
    visualization_settings (s/maybe su/Map)
-   archived               (s/maybe s/Bool)}
+   archived               (s/maybe s/Bool)
+   collection_id          (s/maybe su/IntGreaterThanZero)}
   (let [card (write-check Card id)]
-    (db/update-non-nil-keys! Card id
-      :dataset_query          dataset_query
-      :description            description
-      :display                display
-      :name                   name
-      :visualization_settings visualization_settings
-      :archived               archived)
+    ;; if we're changing the `collection_id` of the Card, make sure we have write permissions for the new group
+    (when (not= (:collection_id card) collection_id)
+      (check-403 (perms/set-has-full-permissions? @*current-user-permissions-set* (perms/collection-readwrite-path collection_id))))
+    ;; ok, now save the Card
+    (db/update! Card id
+      (merge {:collection_id collection_id}
+             (when-not (nil? dataset_query)          {:dataset_query          dataset_query})
+             (when-not (nil? description)            {:description            description})
+             (when-not (nil? display)                {:display                display})
+             (when-not (nil? name)                   {:name                   name})
+             (when-not (nil? visualization_settings) {:visualization_settings visualization_settings})
+             (when-not (nil? archived)               {:archived               archived})))
     (let [event (cond
                   ;; card was archived
                   (and archived

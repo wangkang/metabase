@@ -8,6 +8,7 @@
             (metabase.models [card :refer [Card]]
                              [card-favorite :refer [CardFavorite]]
                              [card-label :refer [CardLabel]]
+                             [collection :refer [Collection]]
                              [database :refer [Database]]
                              [label :refer [Label]]
                              [permissions :refer [Permissions], :as perms]
@@ -17,7 +18,8 @@
             [metabase.test.data :refer :all]
             [metabase.test.data.users :refer :all]
             [metabase.test.util :refer [match-$ random-name with-temp with-temp* obj->json->obj expect-with-temp]]
-            [metabase.util :as u]))
+            [metabase.util :as u]
+            [metabase.test.util :as tu]))
 
 ;; # CARD LIFECYCLE
 
@@ -149,12 +151,14 @@
      :query_type             "query"
      :collection_id          nil
      :archived               false}
-    (dissoc ((user->client :rasta) :post 200 "card" {:name                   card-name
-                                                     :display                "scalar"
-                                                     :dataset_query          {:database database-id
-                                                                              :type     :query
-                                                                              :query    {:source-table table-id, :aggregation {:aggregation-type :count}}}
-                                                     :visualization_settings {:global {:title nil}}})
+    ;; make sure we clean up after ourselves as well and delete the Card we create
+    (dissoc (u/prog1 ((user->client :rasta) :post 200 "card" {:name                   card-name
+                                                              :display                "scalar"
+                                                              :dataset_query          {:database database-id
+                                                                                       :type     :query
+                                                                                       :query    {:source-table table-id, :aggregation {:aggregation-type :count}}}
+                                                              :visualization_settings {:global {:title nil}}})
+              (db/cascade-delete! Card :id (u/get-id <>)))
             :created_at :updated_at :id)))
 
 ;; ## GET /api/card/:id
@@ -388,3 +392,78 @@
   (do-with-temp-native-card-with-params
     (fn [database-id card]
       ((user->client :rasta) :post 200 (format "card/%d/query/json?parameters=%s" (u/get-id card) encoded-params)))))
+
+
+;;; +------------------------------------------------------------------------------------------------------------------------+
+;;; |                                                      COLLECTIONS                                                       |
+;;; +------------------------------------------------------------------------------------------------------------------------+
+
+;; Make sure we can create a card and specify its `collection_id` at the same time
+(tu/expect-with-temp [Collection [collection]]
+  (u/get-id collection)
+  (do
+    (perms/grant-collection-readwrite-permissions! (perms-group/all-users) collection)
+    (let [{card-id :id} ((user->client :rasta) :post 200 "card" {:name                   "My Cool Card"
+                                                                 :display                "scalar"
+                                                                 :dataset_query          {:database (id)
+                                                                                          :type     :query
+                                                                                          :query    {:source-table (id :venues), :aggregation {:aggregation-type :count}}}
+                                                                 :visualization_settings {:global {:title nil}}
+                                                                 :collection_id          (u/get-id collection)})]
+      ;; make sure we clean up after ourselves and delete the newly created Card
+      (u/prog1 (db/select-one-field :collection_id Card :id card-id)
+        (db/cascade-delete! Card :id card-id)))))
+
+;; Make sure we card creation fails if we try to set a `collection_id` we don't have permissions for
+(tu/expect-with-temp [Collection [collection]]
+  "You don't have permissions to do that."
+  ((user->client :rasta) :post 403 "card" {:name                   "My Cool Card"
+                                           :display                "scalar"
+                                           :dataset_query          {:database (id)
+                                                                    :type     :query
+                                                                    :query    {:source-table (id :venues), :aggregation {:aggregation-type :count}}}
+                                           :visualization_settings {:global {:title nil}}
+                                           :collection_id          (u/get-id collection)}))
+
+;; Make sure we can change the `collection_id` of a Card if it's not in any collection
+(tu/expect-with-temp [Card       [card]
+                      Collection [collection]]
+  (u/get-id collection)
+  (do
+    ((user->client :crowberto) :put 200 (str "card/" (u/get-id card)) {:collection_id (u/get-id collection)})
+    (db/select-one-field :collection_id Card :id (u/get-id card))))
+
+;; Make sure we can still change *anything* for a Card if we don't have permissions for the Collection it belongs to
+(tu/expect-with-temp [Collection [collection]
+                      Card       [card       {:collection_id (u/get-id collection)}]]
+  "You don't have permissions to do that."
+  ((user->client :rasta) :put 403 (str "card/" (u/get-id card)) {:name "Number of Blueberries Consumed Per Month"}))
+
+;; Make sure that we can't change the `collection_id` of a Card if we don't have write permissions for the new collection
+(tu/expect-with-temp [Collection [original-collection]
+                      Collection [new-collection]
+                      Card       [card                {:collection_id (u/get-id original-collection)}]]
+  "You don't have permissions to do that."
+  (do
+    (perms/grant-collection-readwrite-permissions! (perms-group/all-users) original-collection)
+    ((user->client :rasta) :put 403 (str "card/" (u/get-id card)) {:collection_id (u/get-id new-collection)})))
+
+;; Make sure that we can't change the `collection_id` of a Card if we don't have write permissions for the current collection
+(tu/expect-with-temp [Collection [original-collection]
+                      Collection [new-collection]
+                      Card       [card                {:collection_id (u/get-id original-collection)}]]
+  "You don't have permissions to do that."
+  (do
+    (perms/grant-collection-readwrite-permissions! (perms-group/all-users) new-collection)
+    ((user->client :rasta) :put 403 (str "card/" (u/get-id card)) {:collection_id (u/get-id new-collection)})))
+
+;; But if we do have permissions for both, we should be able to change it.
+(tu/expect-with-temp [Collection [original-collection]
+                      Collection [new-collection]
+                      Card       [card                {:collection_id (u/get-id original-collection)}]]
+  (u/get-id new-collection)
+  (do
+    (perms/grant-collection-readwrite-permissions! (perms-group/all-users) original-collection)
+    (perms/grant-collection-readwrite-permissions! (perms-group/all-users) new-collection)
+    ((user->client :rasta) :put 200 (str "card/" (u/get-id card)) {:collection_id (u/get-id new-collection)})
+    (db/select-one-field :collection_id Card :id (u/get-id card))))

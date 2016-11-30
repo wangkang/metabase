@@ -47,4 +47,25 @@
                    archived)))
 
 
+;;; ------------------------------------------------------------ GRAPH ENDPOINTS ------------------------------------------------------------
+
+(defn- graph []
+  {})
+
+(defn- update-graph! [new-graph])
+
+(api/defendpoint GET "/graph"
+  "Fetch a graph of all Collection Permissions."
+  []
+  (api/check-superuser)
+  (graph))
+
+(api/defendpoint PUT "/graph"
+  "Do a batch update of Collections Permissions by passing in a modified graph."
+  [:as {body :body}]
+  {body su/Map}
+  (api/check-superuser)
+  (update-graph! body))
+
+
 (api/define-routes)

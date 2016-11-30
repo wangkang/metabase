@@ -222,8 +222,7 @@
                   (and archived
                        (not (:archived card))) :card-archive
                   ;; card was unarchived
-                  (and (not (nil? archived))
-                       (not archived)
+                  (and (false? archived)
                        (:archived card))       :card-unarchive
                   :else                        :card-update)]
       (events/publish-event! event (assoc (Card id) :actor_id *current-user-id*)))))

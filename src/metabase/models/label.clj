@@ -1,9 +1,10 @@
-(ns metabase.models.label
+(ns ^:deprecated metabase.models.label
+  "Labels that can be applied to Cards. Deprecated in favor of Collections."
   (:require [metabase.db :as db]
             [metabase.models.interface :as i]
             [metabase.util :as u]))
 
-(i/defentity Label :label)
+(i/defentity ^:deprecated Label :label)
 
 (defn- assert-unique-slug [slug]
   (when (db/exists? Label :slug slug)

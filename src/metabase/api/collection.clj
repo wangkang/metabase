@@ -6,7 +6,8 @@
             [metabase.db :as db]
             (metabase.models [card :refer [Card]]
                              [collection :refer [Collection]]
-                             [interface :as models])
+                             [interface :as models]
+                             [permissions :as perms])
             [metabase.util.schema :as su]))
 
 
@@ -49,8 +50,24 @@
 
 ;;; ------------------------------------------------------------ GRAPH ENDPOINTS ------------------------------------------------------------
 
+(defn- group-id->perms-set []
+  (into {} (for [[group-id perms] (group-by :group_id (db/select 'Permissions))]
+             {group-id (set (map :object perms))})))
+
+(defn- perms-type-for-collection [perms-set collection-id]
+  (cond
+    (perms/set-has-full-permissions? perms-set (perms/collection-readwrite-path collection-id)) :write
+    (perms/set-has-full-permissions? perms-set (perms/collection-read-path collection-id))      :read
+    :else                                                                                       :none))
+
 (defn- graph []
-  {})
+  (let [group-id->perms (group-id->perms-set)
+        collection-ids  (db/select-ids 'Collection)]
+    {:revision 1
+     :groups   (into {} (for [group-id (db/select-ids 'PermissionsGroup)]
+                          {group-id (let [perms-set (group-id->perms group-id)]
+                                      (into {} (for [collection-id collection-ids]
+                                                 {collection-id (perms-type-for-collection perms-set collection-id)})))}))}))
 
 (defn- update-graph! [new-graph])
 

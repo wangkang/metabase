@@ -325,15 +325,18 @@
 ;;; |                                                PEMISSIONS COLLECTIONS                                                  |
 ;;; +------------------------------------------------------------------------------------------------------------------------+
 
+(defn- random-color []
+  (s/join (repeatedly 6 #(rand-nth [\0 \1 \2 \3 \4 \5 \6 \7 \8 \9 \A \B \C \D \E \F]))))
+
 ;; create new Collections for existing Labels, and add cards to the one of the newly created collections for them
 (defmigration ^{:author "camsaul", :added "0.22.0"} create-collections-for-labels
   (doseq [{label-name :name, icon :icon, :as label} (db/select Label {:order-by [:%lower.name]})]
-    ;; create a new collection for the label. If label had a color, keep it, otherwise give it a neutral default
+    ;; create a new collection for the label. If label had a color, keep it, otherwise give it a random new one
     (println (u/format-color 'green "Creating a new collection for label '%s'..." label-name))
     (let [collection (db/insert! Collection
                        :name  (:name label)
                        :color (or (second (re-matches #"^#?([0-9A-Fa-f]{6})$" icon))
-                                  "888888"))]
+                                  (random-color)))]
       (doseq [card-label (db/select CardLabel :label_id (u/get-id label))]
         (when-let [card (db/select-one Card :id (:card_id card-label), :collection_id nil)]
           (println (u/format-color 'blue "Adding card '%s' to collection '%s'..." (:name card) label-name))

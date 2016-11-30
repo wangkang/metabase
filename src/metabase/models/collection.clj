@@ -26,9 +26,14 @@
   (assoc collection :slug (u/prog1 (u/slugify collection-name collection-slug-max-length)
                             (assert-unique-slug <>))))
 
-(defn- pre-update [{collection-name :name, id :id, color :color, :as collection}]
+(defn- pre-update [{collection-name :name, id :id, color :color, archived? :archived, :as collection}]
+  ;; make sure hex color is valid
   (when (contains? collection :color)
     (assert-valid-hex-color color))
+  ;; archive / unarchive cards in this collection as needed
+  (db/update-where! 'Card {:collection_id id}
+    :archived archived?)
+  ;; slugify the collection name and make sure it's unique
   (if-not collection-name
     collection
     (assoc collection :slug (u/prog1 (u/slugify collection-name collection-slug-max-length)

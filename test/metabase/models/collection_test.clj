@@ -1,8 +1,10 @@
 (ns metabase.models.collection-test
   (:require [expectations :refer :all]
             [metabase.db :as db]
-            [metabase.models.collection :refer [Collection]]
-            [metabase.test.util :as tu]))
+            (metabase.models [card :refer [Card]]
+                             [collection :refer [Collection]])
+            [metabase.test.util :as tu]
+            [metabase.util :as u]))
 
 ;; test that we can create a new Collection with valid inputs
 (expect
@@ -39,3 +41,22 @@
   (tu/with-temp* [Collection [_ {:name "My Favorite Cards"}]
                   Collection [_ {:name "my_favorite Cards"}]]
     :ok))
+
+
+;; check that archiving a collection archives its cards as well
+(expect
+  true
+  (tu/with-temp* [Collection [collection]
+                  Card       [card       {:collection_id (u/get-id collection)}]]
+    (db/update! Collection (u/get-id collection)
+      :archived true)
+    (db/select-one-field :archived Card :id (u/get-id card))))
+
+;; check that unarchiving a collection unarchives its cards as well
+(expect
+  false
+  (tu/with-temp* [Collection [collection {:archived true}]
+                  Card       [card       {:collection_id (u/get-id collection), :archived true}]]
+    (db/update! Collection (u/get-id collection)
+      :archived false)
+    (db/select-one-field :archived Card :id (u/get-id card))))

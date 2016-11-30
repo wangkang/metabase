@@ -14,9 +14,10 @@
   {:pre [(map? schema)]}
   (assoc schema :api-error-message api-error-message))
 
-(defn- existing-schema->api-error-message [existing-schema]
+(defn- existing-schema->api-error-message
   "Error messages for various schemas already defined in `schema.core`.
    These are used as a fallback by API param validation if no value for `:api-error-message` is present."
+  [existing-schema]
   (cond
     (= existing-schema s/Int)                           "value must be an integer."
     (= existing-schema s/Str)                           "value must be a string."

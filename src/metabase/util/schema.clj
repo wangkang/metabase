@@ -14,12 +14,14 @@
   {:pre [(map? schema)]}
   (assoc schema :api-error-message api-error-message))
 
-(def ^:private existing-schema->api-error-message
+(defn- existing-schema->api-error-message [existing-schema]
   "Error messages for various schemas already defined in `schema.core`.
    These are used as a fallback by API param validation if no value for `:api-error-message` is present."
-  {s/Int  "value must be an integer."
-   s/Str  "value must be a string."
-   s/Bool "value must be a boolean."})
+  (cond
+    (= existing-schema s/Int)                           "value must be an integer."
+    (= existing-schema s/Str)                           "value must be a string."
+    (= existing-schema s/Bool)                          "value must be a boolean."
+    (instance? java.util.regex.Pattern existing-schema) (format "value must be a string that matches the regex `%s`." existing-schema)))
 
 (defn api-error-message
   "Extract the API error messages attached to a schema, if any.

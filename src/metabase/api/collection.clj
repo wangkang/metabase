@@ -4,7 +4,8 @@
             [schema.core :as s]
             [metabase.api.common :as api]
             [metabase.db :as db]
-            (metabase.models [collection :refer [Collection]]
+            (metabase.models [card :refer [Card]]
+                             [collection :refer [Collection]]
                              [interface :as models])
             [metabase.util.schema :as su]))
 
@@ -18,7 +19,8 @@
   "Fetch a specific (non-archived) Collection, including cards that belong to it."
   [id]
   ;; TODO - hydrate the `:cards` that belong to this Collection
-  (api/read-check Collection id, :archived false))
+  (assoc (api/read-check Collection id, :archived false)
+    :cards (db/select Card, :collection_id id, :archived false)))
 
 (api/defendpoint POST "/"
   "Create a new Collection."
@@ -43,12 +45,6 @@
     :archived    (if (nil? archived)
                    false
                    archived)))
-
-
-
-
-
-
 
 
 (api/define-routes)

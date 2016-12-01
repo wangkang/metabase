@@ -127,7 +127,7 @@
     (when (and *current-user-id*
                (= (keyword (:type dataset_query)) :native))
       (let [database (db/select-one ['Database :id :name], :id (:database dataset_query))]
-        (qp-perms/throw-if-cannot-run-new-native-query-referencing-db *current-user-id* database)))))
+        (qp-perms/throw-if-cannot-run-new-native-query-referencing-db database)))))
 
 (defn- pre-cascade-delete [{:keys [id]}]
   (db/cascade-delete! 'PulseCard :card_id id)

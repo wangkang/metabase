@@ -11,7 +11,8 @@
                              [permissions-group :as group]
                              [permissions-revision :refer [PermissionsRevision] :as perms-revision])
             [metabase.util :as u]
-            [metabase.util.honeysql-extensions :as hx]))
+            (metabase.util [honeysql-extensions :as hx]
+                           [schema :as su])))
 
 
 ;;; +------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -201,10 +202,10 @@
 
 (def ^:private SchemaPermissionsGraph
   (s/cond-pre (s/enum :none :all)
-              {s/Int TablePermissionsGraph}))
+              {su/IntGreaterThanZero TablePermissionsGraph}))
 
 (def ^:private NativePermissionsGraph
-  (s/enum :write :read :none))
+  (s/enum :write :read :none)) ; :read is DEPRECATED
 
 (def ^:private DBPermissionsGraph
   {(s/optional-key :native)  NativePermissionsGraph
@@ -212,11 +213,11 @@
                                          {(s/maybe s/Str) SchemaPermissionsGraph})})
 
 (def ^:private GroupPermissionsGraph
-  {s/Int DBPermissionsGraph})
+  {su/IntGreaterThanZero DBPermissionsGraph})
 
 (def ^:private PermissionsGraph
   {:revision s/Int
-   :groups   {s/Int GroupPermissionsGraph}})
+   :groups   {su/IntGreaterThanZero GroupPermissionsGraph}})
 
 ;; The "Strict" versions of the various graphs below are intended for schema checking when *updating* the permissions graph.
 ;; In other words, we shouldn't be stopped from returning the graph if it violates the "strict" rules, but we *should* refuse to update the
@@ -239,11 +240,11 @@
                  "DB permissions with a valid combination of values for :native and :schemas"))
 
 (def ^:private StrictGroupPermissionsGraph
-  {s/Int StrictDBPermissionsGraph})
+  {su/IntGreaterThanZero StrictDBPermissionsGraph})
 
 (def ^:private StrictPermissionsGraph
-  {:revision s/Int
-   :groups   {s/Int StrictGroupPermissionsGraph}})
+  {:revision su/IntGreaterThanZero
+   :groups   {su/IntGreaterThanZero StrictGroupPermissionsGraph}})
 
 
 ;;; +------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -288,7 +289,7 @@
 
 ;; TODO - if a DB has no tables, then it won't show up in the permissions graph!
 (s/defn ^:always-validate graph :- PermissionsGraph
-  "Fetch a graph representing the current permissions status for every group and all permissioned objects."
+  "Fetch a graph representing the current permissions status for every group and all permissioned databases."
   []
   (let [permissions (db/select [Permissions :group_id :object])
         tables      (group-by :db_id (db/select ['Table :schema :id :db_id]))]
@@ -382,6 +383,11 @@
   {:pre [(integer? group-id) (integer? database-id)]}
   (grant-permissions! group-id (object-path database-id)))
 
+(defn revoke-collection-permissions!
+  "Revoke all access for GROUP-OR-ID to a Collection."
+  [group-or-id collection-or-id]
+  (delete-related-permissions! group-or-id (collection-readwrite-path collection-or-id)))
+
 (defn grant-collection-readwrite-permissions!
   "Grant full access to a Collection, which means a user can view all Cards in the Collection and add/remove Cards."
   [group-or-id collection-or-id]
@@ -395,12 +401,12 @@
 
 ;;; ---------------------------------------- Graph Updating Fns ----------------------------------------
 
-(s/defn ^:private ^:always-validate update-table-perms! [group-id :- s/Int, db-id :- s/Int, schema :- s/Str, table-id :- s/Int, new-table-perms :- SchemaPermissionsGraph]
+(s/defn ^:private ^:always-validate update-table-perms! [group-id :- su/IntGreaterThanZero, db-id :- su/IntGreaterThanZero, schema :- s/Str, table-id :- su/IntGreaterThanZero, new-table-perms :- SchemaPermissionsGraph]
   (case new-table-perms
     :all  (grant-permissions! group-id db-id schema table-id)
     :none (revoke-permissions! group-id db-id schema table-id)))
 
-(s/defn ^:private ^:always-validate update-schema-perms! [group-id :- s/Int, db-id :- s/Int, schema :- s/Str, new-schema-perms :- SchemaPermissionsGraph]
+(s/defn ^:private ^:always-validate update-schema-perms! [group-id :- su/IntGreaterThanZero, db-id :- su/IntGreaterThanZero, schema :- s/Str, new-schema-perms :- SchemaPermissionsGraph]
   (revoke-permissions! group-id db-id schema)
   (cond
     (= new-schema-perms :all)  (grant-permissions! group-id db-id schema)
@@ -408,7 +414,7 @@
     (map? new-schema-perms)    (doseq [[table-id table-perms] new-schema-perms]
                                  (update-table-perms! group-id db-id schema table-id table-perms))))
 
-(s/defn ^:private ^:always-validate update-native-permissions! [group-id :- s/Int, db-id :- s/Int, new-native-perms :- NativePermissionsGraph]
+(s/defn ^:private ^:always-validate update-native-permissions! [group-id :- su/IntGreaterThanZero, db-id :- su/IntGreaterThanZero, new-native-perms :- NativePermissionsGraph]
   ;; revoke-native-permissions! will delete all entires that would give permissions for native access.
   ;; Thus if you had a root DB entry like `/db/11/` this will delete that too.
   ;; In that case we want to create a new full schemas entry so you don't lose access to all schemas when we modify native access.
@@ -422,7 +428,7 @@
     :none  nil))
 
 
-(s/defn ^:private ^:always-validate update-db-permissions! [group-id :- s/Int, db-id :- s/Int, new-db-perms :- StrictDBPermissionsGraph]
+(s/defn ^:private ^:always-validate update-db-permissions! [group-id :- su/IntGreaterThanZero, db-id :- su/IntGreaterThanZero, new-db-perms :- StrictDBPermissionsGraph]
   (when-let [new-native-perms (:native new-db-perms)]
     (update-native-permissions! group-id db-id new-native-perms))
   (when-let [schemas (:schemas new-db-perms)]
@@ -433,12 +439,12 @@
       (map? schemas)    (doseq [schema (keys schemas)]
                           (update-schema-perms! group-id db-id schema (get-in new-db-perms [:schemas schema]))))))
 
-(s/defn ^:private ^:always-validate update-group-permissions! [group-id :- s/Int, new-group-perms :- StrictGroupPermissionsGraph]
-  (doseq [db-id (keys new-group-perms)]
-    (update-db-permissions! group-id db-id (get new-group-perms db-id))))
+(s/defn ^:private ^:always-validate update-group-permissions! [group-id :- su/IntGreaterThanZero, new-group-perms :- StrictGroupPermissionsGraph]
+  (doseq [[db-id new-db-perms] new-group-perms]
+    (update-db-permissions! group-id db-id new-db-perms)))
 
 
-(defn- check-revision-numbers
+(defn check-revision-numbers
   "Check that the revision number coming in as part of NEW-GRAPH matches the one from OLD-GRAPH.
    This way we can make sure people don't submit a new graph based on something out of date,
    which would otherwise stomp over changes made in the interim.
@@ -459,6 +465,12 @@
       :after   new
       :user_id *current-user-id*)))
 
+(defn log-permissions-changes
+  "Log changes to the permissions graph."
+  [old new]
+  (log/debug (format "Changing permissions: 🔏\nFROM:\n%s\nTO:\n%s"
+                     (u/pprint-to-str 'magenta old)
+                     (u/pprint-to-str 'blue new))))
 
 (s/defn ^:always-validate update-graph!
   "Update the permissions graph, making any changes neccesary to make it match NEW-GRAPH.
@@ -469,14 +481,12 @@
    (let [old-graph (graph)
          [old new] (data/diff (:groups old-graph) (:groups new-graph))]
      (when (or (seq old) (seq new))
-       (log/debug (format "Changing permissions: 🔏\nFROM:\n%s\nTO:\n%s"
-                         (u/pprint-to-str 'magenta old)
-                         (u/pprint-to-str 'blue new)))
+       (log-permissions-changes old new)
        (check-revision-numbers old-graph new-graph)
        (db/transaction
-        (doseq [group-id (keys new)]
-          (update-group-permissions! group-id (get new group-id)))
-        (save-perms-revision! (:revision old-graph) old new)))))
+         (doseq [[group-id changes] new]
+           (update-group-permissions! group-id changes))
+         (save-perms-revision! (:revision old-graph) old new)))))
   ;; The following arity is provided soley for convenience for tests/REPL usage
   ([ks new-value]
    {:pre [(sequential? ks)]}

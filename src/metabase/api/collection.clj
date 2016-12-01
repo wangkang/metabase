@@ -5,9 +5,8 @@
             [metabase.api.common :as api]
             [metabase.db :as db]
             (metabase.models [card :refer [Card]]
-                             [collection :refer [Collection]]
-                             [interface :as models]
-                             [permissions :as perms])
+                             [collection :refer [Collection], :as collection]
+                             [interface :as models])
             [metabase.util.schema :as su]))
 
 
@@ -50,39 +49,35 @@
 
 ;;; ------------------------------------------------------------ GRAPH ENDPOINTS ------------------------------------------------------------
 
-(defn- group-id->perms-set []
-  (into {} (for [[group-id perms] (group-by :group_id (db/select 'Permissions))]
-             {group-id (set (map :object perms))})))
-
-(defn- perms-type-for-collection [perms-set collection-id]
-  (cond
-    (perms/set-has-full-permissions? perms-set (perms/collection-readwrite-path collection-id)) :write
-    (perms/set-has-full-permissions? perms-set (perms/collection-read-path collection-id))      :read
-    :else                                                                                       :none))
-
-(defn- graph []
-  (let [group-id->perms (group-id->perms-set)
-        collection-ids  (db/select-ids 'Collection)]
-    {:revision 1
-     :groups   (into {} (for [group-id (db/select-ids 'PermissionsGroup)]
-                          {group-id (let [perms-set (group-id->perms group-id)]
-                                      (into {} (for [collection-id collection-ids]
-                                                 {collection-id (perms-type-for-collection perms-set collection-id)})))}))}))
-
-(defn- update-graph! [new-graph])
-
 (api/defendpoint GET "/graph"
   "Fetch a graph of all Collection Permissions."
   []
   (api/check-superuser)
-  (graph))
+  (collection/graph))
+
+
+(defn- ->int [id] (Integer/parseInt (name id)))
+
+(defn- dejsonify-collections [collections]
+  (into {} (for [[collection-id perms] collections]
+             {(->int collection-id) (keyword perms)})))
+
+(defn- dejsonify-groups [groups]
+  (into {} (for [[group-id collections] groups]
+             {(->int group-id) (dejsonify-collections collections)})))
+
+(defn- dejsonify-graph
+  "Fix the types in the graph when it comes in from the API, e.g. converting things like `\"none\"` to `:none` and parsing object keys as integers."
+  [graph]
+  (update graph :groups dejsonify-groups))
 
 (api/defendpoint PUT "/graph"
   "Do a batch update of Collections Permissions by passing in a modified graph."
   [:as {body :body}]
   {body su/Map}
   (api/check-superuser)
-  (update-graph! body))
+  (collection/update-graph! (dejsonify-graph body))
+  (collection/graph))
 
 
 (api/define-routes)

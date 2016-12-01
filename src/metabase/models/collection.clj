@@ -94,16 +94,16 @@
   (into {} (for [[group-id perms] (group-by :group_id (db/select 'Permissions))]
              {group-id (set (map :object perms))})))
 
-(s/defn ^:private ^:always-validate perms-type-for-collection
-  [permissions-set collection-id] :- CollectionPermissions
+(s/defn ^:private ^:always-validate perms-type-for-collection :- CollectionPermissions
+  [permissions-set collection-id]
   (cond
     (perms/set-has-full-permissions? permissions-set (perms/collection-readwrite-path collection-id)) :write
     (perms/set-has-full-permissions? permissions-set (perms/collection-read-path collection-id))      :read
     :else                                                                                             :none))
 
-(s/defn ^:private ^:always-validate group-permissions-graph
+(s/defn ^:private ^:always-validate group-permissions-graph :- GroupPermissionsGraph
   "Return the permissions graph for a single group having PERMISSIONS-SET."
-  [permissions-set collection-ids] :- GroupPermissionsGraph
+  [permissions-set collection-ids]
   (into {} (for [collection-id collection-ids]
              {collection-id (perms-type-for-collection permissions-set collection-id)})))
 

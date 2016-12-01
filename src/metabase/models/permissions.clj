@@ -117,15 +117,15 @@
 ;;; ---------------------------------------- Permissions Checking Fns ----------------------------------------
 
 (defn is-permissions-for-object?
-  "Does PERMISSIONS-PATH grant *full* access for object PATH?"
-  [permissions-path path]
-  (str/starts-with? path permissions-path))
+  "Does PERMISSIONS-PATH grant *full* access for OBJECT-PATH?"
+  [permissions-path object-path]
+  (str/starts-with? object-path permissions-path))
 
 (defn is-partial-permissions-for-object?
-  "Does PERMISSIONS-PATH grant access full access for OBJECT path *or* for a descendant of object PATH?"
-  [permissions-path path]
-  (or (is-permissions-for-object? permissions-path path)
-      (str/starts-with? permissions-path path)))
+  "Does PERMISSIONS-PATH grant access full access for OBJECT-PATH *or* for a descendant of OBJECT-PATH?"
+  [permissions-path object-path]
+  (or (is-permissions-for-object? permissions-path object-path)
+      (str/starts-with? permissions-path object-path)))
 
 
 (defn is-permissions-set?

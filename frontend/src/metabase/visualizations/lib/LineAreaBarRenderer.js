@@ -303,7 +303,7 @@ function getYAxisSplitLeftAndRight(series, yAxisSplit, yExtents) {
     series: indexes.map(index => series[index]),
     extent: d3.extent([].concat(...indexes.map(index => yExtents[index]))),
   }));
-}
+} // rebase to upstream
 
 function getIsSplitYAxis(left, right) {
   return right && right.series.length && (left && left.series.length > 0);

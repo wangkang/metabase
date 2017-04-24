@@ -1,6 +1,9 @@
-import React, { Component, PropTypes } from "react";
+import React, { Component } from "react";
+import PropTypes from "prop-types";
 import ReactDOM from "react-dom";
 import cx from "classnames";
+
+import { getScrollX, getScrollY } from "metabase/lib/dom";
 
 import ReactCSSTransitionGroup from "react-addons-css-transition-group";
 import { Motion, spring } from "react-motion";
@@ -101,6 +104,8 @@ export class WindowModal extends Component {
     }
 }
 
+import routeless from "metabase/hoc/Routeless";
+
 export class FullPageModal extends Component {
     static childContextTypes = MODAL_CHILD_CONTEXT_TYPES;
 
@@ -117,8 +122,8 @@ export class FullPageModal extends Component {
         document.querySelector('body').appendChild(this._modalElement);
 
         // save the scroll position, scroll to the top left, and disable scrolling
-        this._scrollX = window.scrollX;
-        this._scrollY = window.scrollY;
+        this._scrollX = getScrollX();
+        this._scrollY = getScrollY();
         window.scrollTo(0,0);
         document.body.style.overflow = "hidden";
 
@@ -138,8 +143,12 @@ export class FullPageModal extends Component {
         this._renderModal(false);
 
         // restore scroll position and scrolling
-        window.scrollTo(this._scrollX, this._scrollY);
-        document.body.style.overflow = "unset";
+        document.body.style.overflow = "";
+
+        // On IE11 a timeout is required for the scroll to happen after the change of overflow setting
+        setTimeout(() => {
+            window.scrollTo(this._scrollX, this._scrollY);
+        }, 0)
 
         // wait for animations to complete before unmounting
         setTimeout(() => {
@@ -155,7 +164,7 @@ export class FullPageModal extends Component {
                 { opacity: spring(0), top: spring(20) }
             }>
                 { motionStyle =>
-                    <div className="full-height relative" style={motionStyle}>
+                    <div className="full-height relative scroll-y" style={motionStyle}>
                     { getModalContent(this.props) }
                     </div>
                 }
@@ -178,10 +187,12 @@ export class InlineModal extends Component {
     }
 }
 
+// the "routeless" version should only be used for non-inline modals
+const RoutelessFullPageModal = routeless(FullPageModal);
 
 const Modal = ({ full, inline, ...props }) =>
     full ?
-        (props.isOpen ? <FullPageModal {...props} /> : null)
+        (props.isOpen ? <RoutelessFullPageModal {...props} /> : null)
     : inline ?
         <InlineModal {...props} />
     :

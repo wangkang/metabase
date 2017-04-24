@@ -1,6 +1,6 @@
 /* @flow */
 
-import React, { Component, PropTypes } from "react";
+import React, { Component } from "react";
 
 import ChoroplethMap from "../components/ChoroplethMap.jsx";
 import PinMap from "../components/PinMap.jsx";
@@ -10,7 +10,7 @@ import { isNumeric, isLatitude, isLongitude, hasLatitudeAndLongitudeColumns } fr
 import { metricSetting, dimensionSetting, fieldSetting } from "metabase/visualizations/lib/settings";
 import MetabaseSettings from "metabase/lib/settings";
 
-import type { VisualizationProps } from "metabase/visualizations";
+import type { VisualizationProps } from "metabase/meta/types/Visualization";
 
 import _ from "underscore";
 
@@ -112,7 +112,7 @@ export default class Map extends Component<*, VisualizationProps, *> {
         }
     }
 
-    static checkRenderable(cols, rows, settings) {
+    static checkRenderable([{ data: { cols, rows} }], settings) {
         if (settings["map.type"] === "pin") {
             if (!settings["map.longitude_column"] || !settings["map.latitude_column"]) {
                 throw new ChartSettingsError("Please select longitude and latitude columns in the chart settings.", "Data");

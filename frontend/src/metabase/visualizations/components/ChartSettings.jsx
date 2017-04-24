@@ -1,4 +1,4 @@
-import React, { Component, PropTypes } from "react";
+import React, { Component } from "react";
 import cx from "classnames";
 import { assocIn } from "icepick";
 import _ from "underscore";
@@ -142,6 +142,7 @@ class ChartSettings extends Component {
                                 className="spread"
                                 series={series}
                                 isEditing
+                                showTitle
                                 isDashboard
                                 showWarnings
                                 onUpdateVisualizationSettings={this.onChangeSettings}

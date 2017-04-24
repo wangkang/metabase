@@ -15,7 +15,7 @@
             [metabase.sync-database.analyze :as analyze]
             [metabase.util :as u]
             [metabase.util.honeysql-extensions :as hx])
-  (:import java.sql.DatabaseMetaData
+  (:import (java.sql DatabaseMetaData ResultSet)
            java.util.Map
            (clojure.lang Keyword PersistentVector)
            com.mchange.v2.c3p0.ComboPooledDataSource
@@ -27,9 +27,12 @@
    Methods marked *OPTIONAL* have default implementations in `ISQLDriverDefaultsMixin`."
 
   (active-tables ^java.util.Set [this, ^DatabaseMetaData metadata]
-    "Return a set of maps containing information about the active tables/views, collections, or equivalent that currently exist in DATABASE.
+    "*OPTIONAL* Return a set of maps containing information about the active tables/views, collections, or equivalent that currently exist in DATABASE.
      Each map should contain the key `:name`, which is the string name of the table. For databases that have a concept of schemas,
-     this map should also include the string name of the table's `:schema`.")
+     this map should also include the string name of the table's `:schema`.
+
+   Two different implementations are provided in this namespace: `fast-active-tables` (the default), and `post-filtered-active-tables`. You should be fine using
+   the default, but refer to the documentation for those functions for more details on the differences.")
 
   ;; The following apply-* methods define how the SQL Query Processor handles given query clauses. Each method is called when a matching clause is present
   ;; in QUERY, and should return an appropriately modified version of KORMA-QUERY. Most drivers can use the default implementations for all of these methods,
@@ -71,7 +74,7 @@
   (field-percent-urls [this field]
     "*OPTIONAL*. Implementation of the `:field-percent-urls-fn` to be passed to `make-analyze-table`.
      The default implementation is `fast-field-percent-urls`, which avoids a full table scan. Substitue this with `slow-field-percent-urls` for databases
-     where this doesn't work, such as SQL Server")
+     where this doesn't work, such as SQL Server.")
 
   (field->alias ^String [this, ^Field field]
     "*OPTIONAL*. Return the alias that should be used to for FIELD, i.e. in an `AS` clause. The default implementation calls `name`, which
@@ -127,8 +130,8 @@
   (result-set-read-column [x _ _] (PersistentVector/adopt x)))
 
 
-(def ^:dynamic ^:private connection-pools
-  "A map of our currently open connection pools, keyed by DATABASE `:id`."
+(def ^:dynamic ^:private database-id->connection-pool
+  "A map of our currently open connection pools, keyed by Database `:id`."
   (atom {}))
 
 (defn- create-connection-pool
@@ -147,10 +150,10 @@
   "We are being informed that a DATABASE has been updated, so lets shut down the connection pool (if it exists) under
    the assumption that the connection details have changed."
   [_ {:keys [id]}]
-  (when-let [pool (get @connection-pools id)]
+  (when-let [pool (get @database-id->connection-pool id)]
     (log/debug (u/format-color 'red "Closing connection pool for database %d ..." id))
     ;; remove the cached reference to the pool so we don't try to use it anymore
-    (swap! connection-pools dissoc id)
+    (swap! database-id->connection-pool dissoc id)
     ;; now actively shut down the pool so that any open connections are closed
     (.close ^ComboPooledDataSource (:datasource pool))))
 
@@ -158,12 +161,12 @@
   "Return a JDBC connection spec that includes a cp30 `ComboPooledDataSource`.
    Theses connection pools are cached so we don't create multiple ones to the same DB."
   [{:keys [id], :as database}]
-  (if (contains? @connection-pools id)
+  (if (contains? @database-id->connection-pool id)
     ;; we have an existing pool for this database, so use it
-    (get @connection-pools id)
+    (get @database-id->connection-pool id)
     ;; create a new pool and add it to our cache, then return it
     (u/prog1 (create-connection-pool database)
-      (swap! connection-pools assoc id <>))))
+      (swap! database-id->connection-pool assoc id <>))))
 
 (defn db->jdbc-connection-spec
   "Return a JDBC connection spec for DATABASE. This will have a C3P0 pool as its datasource."
@@ -216,10 +219,8 @@
     (into [(hx/unescape-dots sql)] args)))
 
 (defn- qualify+escape ^clojure.lang.Keyword
-  ([table]
-   (hx/qualify-and-escape-dots (:schema table) (:name table)))
-  ([table field]
-   (hx/qualify-and-escape-dots (:schema table) (:name table) (:name field))))
+  ([table]       (hx/qualify-and-escape-dots (:schema table) (:name table)))
+  ([table field] (hx/qualify-and-escape-dots (:schema table) (:name table) (:name field))))
 
 
 (defn- query
@@ -336,6 +337,12 @@
      (let [~binding (.getMetaData conn#)]
        ~@body)))
 
+(defn- get-tables
+  "Fetch a JDBC Metadata ResultSet of tables in the DB, optionally limited to ones belonging to a given schema."
+  ^ResultSet [^DatabaseMetaData metadata, ^String schema-or-nil]
+  (jdbc/result-set-seq (.getTables metadata nil schema-or-nil "%" ; tablePattern "%" = match all tables
+                                   (into-array String ["TABLE", "VIEW", "FOREIGN TABLE", "MATERIALIZED VIEW"]))))
+
 (defn fast-active-tables
   "Default, fast implementation of `ISQLDriver/active-tables` best suited for DBs with lots of system tables (like Oracle).
    Fetch list of schemas, then for each one not in `excluded-schemas`, fetch its Tables, and combine the results.
@@ -345,7 +352,7 @@
   (let [all-schemas (set (map :table_schem (jdbc/result-set-seq (.getSchemas metadata))))
         schemas     (set/difference all-schemas (excluded-schemas driver))]
     (set (for [schema     schemas
-               table-name (mapv :table_name (jdbc/result-set-seq (.getTables metadata nil schema "%" (into-array String ["TABLE", "VIEW", "FOREIGN TABLE"]))))] ; tablePattern "%" = match all tables
+               table-name (mapv :table_name (get-tables metadata schema))]
            {:name   table-name
             :schema schema}))))
 
@@ -354,7 +361,7 @@
    Fetch *all* Tables, then filter out ones whose schema is in `excluded-schemas` Clojure-side."
   [driver, ^DatabaseMetaData metadata]
   (set (for [table (filter #(not (contains? (excluded-schemas driver) (:table_schem %)))
-                           (jdbc/result-set-seq (.getTables metadata nil nil "%" (into-array String ["TABLE", "VIEW", "FOREIGN TABLE"]))))] ; tablePattern "%" = match all tables
+                           (get-tables metadata nil))]
          {:name   (:table_name table)
           :schema (:table_schem table)})))
 
@@ -422,7 +429,7 @@
   (require 'metabase.driver.generic-sql.query-processor)
   {:active-tables        fast-active-tables
    :apply-aggregation    (resolve 'metabase.driver.generic-sql.query-processor/apply-aggregation) ; don't resolve the vars yet so during interactive dev if the
-   :apply-breakout       (resolve 'metabase.driver.generic-sql.query-processor/apply-breakout) ; underlying impl changes we won't have to reload all the drivers
+   :apply-breakout       (resolve 'metabase.driver.generic-sql.query-processor/apply-breakout)    ; underlying impl changes we won't have to reload all the drivers
    :apply-fields         (resolve 'metabase.driver.generic-sql.query-processor/apply-fields)
    :apply-filter         (resolve 'metabase.driver.generic-sql.query-processor/apply-filter)
    :apply-join-tables    (resolve 'metabase.driver.generic-sql.query-processor/apply-join-tables)

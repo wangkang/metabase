@@ -1,21 +1,22 @@
 /* @flow */
 
-import React, { Component, PropTypes } from "react";
+import React, { Component } from "react";
 import { Link } from "react-router";
 import styles from "./Scalar.css";
 
+import Icon from "metabase/components/Icon.jsx";
+import Tooltip from "metabase/components/Tooltip.jsx";
 import Ellipsified from "metabase/components/Ellipsified.jsx";
 
-import Urls from "metabase/lib/urls";
+import * as Urls from "metabase/lib/urls";
 import { formatValue } from "metabase/lib/formatting";
 import { TYPE } from "metabase/lib/types";
 import { isNumber } from "metabase/lib/schema_metadata";
 
 import cx from "classnames";
-import { getIn } from "icepick";
 import d3 from "d3";
 
-import type { VisualizationProps } from "metabase/visualizations";
+import type { VisualizationProps } from "metabase/meta/types/Visualization";
 
 export default class Scalar extends Component<*, VisualizationProps, *> {
     static uiName = "Number";
@@ -27,11 +28,13 @@ export default class Scalar extends Component<*, VisualizationProps, *> {
 
     static minSize = { width: 3, height: 3 };
 
+    _scalar: ?HTMLElement;
+
     static isSensible(cols, rows) {
         return rows.length === 1 && cols.length === 1;
     }
 
-    static checkRenderable(cols, rows) {
+    static checkRenderable([{ data: { cols, rows} }]) {
         // scalar can always be rendered, nothing needed here
     }
 
@@ -100,12 +103,13 @@ export default class Scalar extends Component<*, VisualizationProps, *> {
     };
 
     render() {
-        let { card, data, className, actionButtons, gridSize, settings, linkToCard } = this.props;
+        let { series: [{ card, data: { cols, rows }}], className, actionButtons, gridSize, settings, linkToCard, visualizationIsClickable, onVisualizationClick } = this.props;
+        let description = settings["card.description"];
 
         let isSmall = gridSize && gridSize.width < 4;
-        const column = getIn(data, ["cols", 0]);
+        const column = cols[0];
 
-        let scalarValue = getIn(data, ["rows", 0, 0]);
+        let scalarValue = rows[0] && rows[0][0];
         if (scalarValue == null) {
             scalarValue = "";
         }
@@ -164,24 +168,46 @@ export default class Scalar extends Component<*, VisualizationProps, *> {
             fullScalarValue = fullScalarValue + settings["scalar.suffix"];
         }
 
+        const clicked = {
+            value: rows[0] && rows[0][0],
+            column: cols[0]
+        };
+        const isClickable = visualizationIsClickable(clicked);
+
         return (
             <div className={cx(className, styles.Scalar, styles[isSmall ? "small" : "large"])}>
                 <div className="Card-title absolute top right p1 px2">{actionButtons}</div>
                 <Ellipsified
-                    className={cx(styles.Value, 'ScalarValue', 'fullscreen-normal-text', 'fullscreen-night-text')}
+                    className={cx(styles.Value, 'ScalarValue text-dark fullscreen-normal-text fullscreen-night-text', {
+                        "text-brand-hover cursor-pointer": isClickable
+                    })}
                     tooltip={fullScalarValue}
                     alwaysShowTooltip={fullScalarValue !== compactScalarValue}
                     style={{maxWidth: '100%'}}
                 >
-                    {compactScalarValue}
+                    <span
+                        onClick={isClickable && (() => this._scalar && onVisualizationClick({ ...clicked, element: this._scalar }))}
+                        ref={scalar => this._scalar = scalar}
+                    >
+                        {compactScalarValue}
+                    </span>
                 </Ellipsified>
-                <Ellipsified className={styles.Title} tooltip={card.name}>
-                    { linkToCard ?
-                        <Link to={Urls.card(card.id)} className="no-decoration fullscreen-normal-text fullscreen-night-text">{settings["card.title"]}</Link>
-                    :
-                        <span className="fullscreen-normal-text fullscreen-night-text">{settings["card.title"]}</span>
+                <div className={styles.Title + " flex align-center"}>
+                    <Ellipsified tooltip={card.name}>
+                        { linkToCard ?
+                          <Link to={Urls.question(card.id)} className="no-decoration fullscreen-normal-text fullscreen-night-text">{settings["card.title"]}</Link>
+                          :
+                          <span className="fullscreen-normal-text fullscreen-night-text">{settings["card.title"]}</span>
+                        }
+                    </Ellipsified>
+                    { description &&
+                      <div className="hover-child">
+                          <Tooltip tooltip={description} maxWidth={'22em'}>
+                              <Icon name='info' />
+                          </Tooltip>
+                      </div>
                     }
-                </Ellipsified>
+                </div>
             </div>
         );
     }

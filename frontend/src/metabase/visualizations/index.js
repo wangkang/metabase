@@ -1,7 +1,5 @@
 /* @flow weak */
 
-import { Component } from "react";
-
 import Scalar      from "./visualizations/Scalar.jsx";
 import Progress    from "./visualizations/Progress.jsx";
 import Table       from "./visualizations/Table.jsx";
@@ -16,41 +14,7 @@ import Funnel      from "./visualizations/Funnel.jsx";
 
 import _ from "underscore";
 
-import type { DatasetData } from "metabase/meta/types/Dataset";
-import type { Card, VisualizationSettings } from "metabase/meta/types/Card";
-
-export type HoverObject = {
-    index?: number,
-    axisIndex?: number
-}
-
-// type Visualization = Component<*, VisualizationProps, *>;
-
-// $FlowFixMe
-export type Series = { card: Card, data: DatasetData }[] & { _raw: Series }
-
-export type VisualizationProps = {
-    series: Series,
-    card: Card,
-    data: DatasetData,
-    settings: VisualizationSettings,
-
-    className?: string,
-    gridSize: ?{
-        width: number,
-        height: number
-    },
-
-    isDashboard: boolean,
-    isEditing: boolean,
-    actionButtons: Node,
-    linkToCard?: bool,
-
-    hovered: ?HoverObject,
-    onHoverChange: (?HoverObject) => void,
-
-    onUpdateVisualizationSettings: ({ [key: string]: any }) => void
-}
+import type { Series } from "metabase/meta/types/Visualization";
 
 const visualizations = new Map();
 const aliases = new Map();

@@ -1,6 +1,7 @@
 /* @flow */
 
-import React, { Component, PropTypes } from "react";
+import React, { Component } from "react";
+import PropTypes from "prop-types";
 import ReactDOM from "react-dom";
 import styles from "./Table.css";
 
@@ -14,7 +15,7 @@ import { getFriendlyName } from "metabase/visualizations/lib/utils";
 import cx from "classnames";
 import _ from "underscore";
 
-import type { VisualizationProps } from "metabase/visualizations";
+import type { VisualizationProps } from "metabase/meta/types/Visualization";
 
 type Props = VisualizationProps & {
     height: number,
@@ -87,7 +88,7 @@ export default class TableSimple extends Component<*, Props, State> {
 
         return (
             <div className={cx(this.props.className, "relative flex flex-column")}>
-                <div className="flex-full relative border-bottom">
+                <div className="flex-full relative">
                     <div className="absolute top bottom left right scroll-x scroll-show scroll-show--horizontal scroll-show--hover" style={{ overflowY: "hidden" }}>
                         <table className={cx(styles.Table, styles.TableSimple, 'fullscreen-normal-text', 'fullscreen-night-text')}>
                             <thead ref="header">

@@ -1,6 +1,6 @@
 /* @flow */
 
-import React, { Component, PropTypes } from "react";
+import React, { Component } from "react";
 import ReactDOM from "react-dom";
 import styles from "./PieChart.css";
 
@@ -29,7 +29,7 @@ const OTHER_SLICE_MIN_PERCENTAGE = 0.003;
 
 const PERCENT_REGEX = /percent/i;
 
-import type { VisualizationProps } from "metabase/visualizations";
+import type { VisualizationProps } from "metabase/meta/types/Visualization";
 
 type Props = VisualizationProps;
 
@@ -44,7 +44,7 @@ export default class PieChart extends Component<*, Props, *> {
         return cols.length === 2;
     }
 
-    static checkRenderable(cols, rows, settings) {
+    static checkRenderable([{ data: { cols, rows} }], settings) {
         if (!settings["pie.dimension"] || !settings["pie.metric"]) {
             throw new ChartSettingsError("Which columns do want to use?", "Data");
         }
@@ -90,7 +90,7 @@ export default class PieChart extends Component<*, Props, *> {
     }
 
     render() {
-        const { series, hovered, onHoverChange, className, gridSize, settings } = this.props;
+        const { series, hovered, onHoverChange, onVisualizationClick, className, gridSize, settings } = this.props;
 
         const [{ data: { cols, rows }}] = series;
         const dimensionIndex = _.findIndex(cols, (col) => col.name === settings["pie.dimension"]);
@@ -119,16 +119,20 @@ export default class PieChart extends Component<*, Props, *> {
             .partition((d) => d.percentage > sliceThreshold)
             .value();
 
-        let otherTotal = others.reduce((acc, o) => acc + o.value, 0);
         let otherSlice;
-        if (otherTotal > 0) {
-            otherSlice = {
-                key: "Other",
-                value: otherTotal,
-                percentage: otherTotal / total,
-                color: "gray"
-            };
-            slices.push(otherSlice);
+        if (others.length > 1) {
+            let otherTotal = others.reduce((acc, o) => acc + o.value, 0);
+            if (otherTotal > 0) {
+                otherSlice = {
+                    key: "Other",
+                    value: otherTotal,
+                    percentage: otherTotal / total,
+                    color: "gray"
+                };
+                slices.push(otherSlice);
+            }
+        } else {
+            slices.push(...others);
         }
 
         // increase "other" slice so it's barely visible
@@ -150,7 +154,7 @@ export default class PieChart extends Component<*, Props, *> {
             .outerRadius(OUTER_RADIUS)
             .innerRadius(OUTER_RADIUS * INNER_RADIUS_RATIO);
 
-        let hoverForIndex = (index, event) => ({
+        const hoverForIndex = (index, event) => ({
             index,
             event: event && event.nativeEvent,
             data: slices[index] === otherSlice ?
@@ -164,10 +168,24 @@ export default class PieChart extends Component<*, Props, *> {
             ].concat(showPercentInTooltip ? [{ key: "Percentage", value: formatPercent(slices[index].percentage) }] : [])
         });
 
+        const onClickSlice = ({ index, event }) => {
+            if (onVisualizationClick && slices[index] !== otherSlice) {
+                onVisualizationClick({
+                    value:  slices[index].value,
+                    column: cols[metricIndex],
+                    dimensions: [{
+                        value: slices[index].key,
+                        column: cols[dimensionIndex],
+                    }],
+                    event:        event
+                })
+            }
+        }
+
         let value, title;
         if (hovered && hovered.index != null && slices[hovered.index] !== otherSlice) {
-            title = slices[hovered.index].key;
-            value = slices[hovered.index].value;
+            title = formatDimension(slices[hovered.index].key);
+            value = formatMetric(slices[hovered.index].value);
         } else {
             title = "Total";
             value = formatMetric(total);
@@ -197,6 +215,10 @@ export default class PieChart extends Component<*, Props, *> {
                                         opacity={(hovered && hovered.index != null && hovered.index !== index) ? 0.3 : 1}
                                         onMouseMove={(e) => onHoverChange && onHoverChange(hoverForIndex(index, e))}
                                         onMouseLeave={() => onHoverChange && onHoverChange(null)}
+                                        onClick={(e) => onClickSlice({
+                                            index: index,
+                                            event: e.nativeEvent
+                                        })}
                                     />
                                 )}
                             </g>

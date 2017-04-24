@@ -6,6 +6,7 @@
 
 html {
     height: 100%; /* ensure the entire page will fill the window */
+    width: 100%;
 }
 
 body {
@@ -50,6 +51,10 @@ a {
 input,
 textarea {
     font-family: var(--default-font-family), "Helvetica Neue", Helvetica, sans-serif;
+}
+
+.pointer-events-none {
+  pointer-events: none;
 }
 
 .disabled, :local(.disabled) {

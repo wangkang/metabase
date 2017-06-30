@@ -1,6 +1,7 @@
 /* @flow */
 
-import { GET, PUT, POST, DELETE } from "metabase/lib/api";
+import api from "metabase/lib/api";
+const { GET, PUT, POST, DELETE } = api;
 
 import { IS_EMBED_PREVIEW } from "metabase/lib/embed";
 
@@ -45,6 +46,8 @@ export const DashboardApi = {
     addcard:                    POST("/api/dashboard/:dashId/cards"),
     removecard:               DELETE("/api/dashboard/:dashId/cards"),
     reposition_cards:            PUT("/api/dashboard/:dashId/cards"),
+    favorite:                   POST("/api/dashboard/:dashId/favorite"),
+    unfavorite:               DELETE("/api/dashboard/:dashId/favorite"),
 
     listPublic:                  GET("/api/dashboard/public"),
     listEmbeddable:              GET("/api/dashboard/embeddable"),
@@ -85,9 +88,13 @@ export const SlackApi = {
     updateSettings:              PUT("/api/slack/settings"),
 };
 
+export const LdapApi = {
+    updateSettings:              PUT("/api/ldap/settings")
+};
+
 export const MetabaseApi = {
     db_list:                     GET("/api/database"),
-    db_list_with_tables:         GET("/api/database?include_tables=true"),
+    db_list_with_tables:         GET("/api/database?include_tables=true&include_cards=true"),
     db_create:                  POST("/api/database"),
     db_add_sample_dataset:      POST("/api/database/sample_dataset"),
     db_get:                      GET("/api/database/:dbId"),
@@ -118,7 +125,7 @@ export const MetabaseApi = {
     // table_sync_metadata:        POST("/api/table/:tableId/sync"),
     // field_get:                   GET("/api/field/:fieldId"),
     // field_summary:               GET("/api/field/:fieldId/summary"),
-    // field_values:                GET("/api/field/:fieldId/values"),
+    field_values:                GET("/api/field/:fieldId/values"),
     // field_value_map_update:     POST("/api/field/:fieldId/value_map_update"),
     field_update:                PUT("/api/field/:id"),
     dataset:                    POST("/api/dataset"),
@@ -206,6 +213,7 @@ export const GettingStartedApi = {
 export const SetupApi = {
     create:                     POST("/api/setup"),
     validate_db:                POST("/api/setup/validate"),
+    admin_checklist:             GET("/api/setup/admin_checklist"),
 };
 
 export const UserApi = {
@@ -223,6 +231,11 @@ export const UserApi = {
 export const UtilApi = {
     password_check:             POST("/api/util/password_check"),
     random_token:                GET("/api/util/random_token"),
+    logs:                        GET("/api/util/logs"),
+};
+
+export const GeoJSONApi = {
+    get:                         GET("/api/geojson/:id"),
 };
 
 global.services = exports;

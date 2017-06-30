@@ -1,23 +1,27 @@
 (ns metabase.api.table-test
   "Tests for /api/table endpoints."
   (:require [expectations :refer :all]
-            (toucan [db :as db]
-                    [hydrate :as hydrate])
-            [toucan.util.test :as tt]
-            (metabase [driver :as driver]
-                      [http-client :as http]
-                      [middleware :as middleware])
-            (metabase.models [database :refer [Database]]
-                             [field :refer [Field]]
-                             [table :refer [Table]]
-                             [permissions :as perms]
-                             [permissions-group :as perms-group])
-            [metabase.test.data :refer :all]
-            (metabase.test.data [dataset-definitions :as defs]
-                                [datasets :as datasets]
-                                [users :refer :all])
-            [metabase.test.util :refer [match-$ resolve-private-vars], :as tu]
-            [metabase.util :as u]))
+            [metabase
+             [driver :as driver]
+             [http-client :as http]
+             [middleware :as middleware]
+             [sync-database :as sync-database]
+             [util :as u]]
+            [metabase.models
+             [card :refer [Card]]
+             [database :as database :refer [Database]]
+             [field :refer [Field]]
+             [permissions :as perms]
+             [permissions-group :as perms-group]
+             [table :refer [Table]]]
+            [metabase.test
+             [data :as data :refer :all]
+             [util :as tu :refer [match-$ resolve-private-vars]]]
+            [metabase.test.data
+             [dataset-definitions :as defs]
+             [users :refer :all]]
+            [toucan.hydrate :as hydrate]
+            [toucan.util.test :as tt]))
 
 (resolve-private-vars metabase.models.table pk-field-id)
 
@@ -373,6 +377,26 @@
       (dissoc ((user->client :crowberto) :get 200 (format "table/%d" (:id table)))
               :updated_at)))
 
+(tt/expect-with-temp [Table [table {:rows 15}]]
+  2
+  (let [original-sync-table! sync-database/sync-table!
+        called (atom 0)
+        test-fun (fn [state]
+                   (with-redefs [sync-database/sync-table! (fn [& args] (swap! called inc)
+                                                             (apply original-sync-table! args))]
+                     ((user->client :crowberto) :put 200 (format "table/%d" (:id table)) {:display_name    "Userz"
+                                                                                          :entity_type     "person"
+                                                                                          :visibility_type state
+                                                                                          :description     "What a nice table!"})))]
+    (do (test-fun "hidden")
+        (test-fun nil)
+        (test-fun "hidden")
+        (test-fun "cruft")
+        (test-fun "technical")
+        (test-fun nil)
+        (test-fun "technical")
+        @called)))
+
 
 ;; ## GET /api/table/:id/fks
 ;; We expect a single FK from CHECKINS.USER_ID -> USERS.ID
@@ -433,3 +457,50 @@
                                                               :raw_table_id $
                                                               :created_at   $}))}))}])
   ((user->client :rasta) :get 200 (format "table/%d/fks" (id :users))))
+
+
+;; Make sure metadata for 'virtual' tables comes back as expected from GET /api/table/:id/query_metadata
+(tt/expect-with-temp [Card [card {:name          "Go Dubs!"
+                                  :database_id   (data/id)
+                                  :dataset_query {:database (data/id)
+                                                  :type     :native
+                                                  :native   {:query (format "SELECT NAME, ID, PRICE, LATITUDE FROM VENUES")}}}]]
+  (let [card-virtual-table-id (str "card__" (u/get-id card))]
+    {:display_name "Go Dubs!"
+     :db_id        database/virtual-id
+     :id           card-virtual-table-id
+     :fields       [{:name         "NAME"
+                     :display_name "Name"
+                     :base_type    "type/Text"
+                     :table_id     card-virtual-table-id
+                     :id           ["field-literal" "NAME" "type/Text"]
+                     :special_type nil}
+                    {:name         "ID"
+                     :display_name "ID"
+                     :base_type    "type/Integer"
+                     :table_id     card-virtual-table-id
+                     :id           ["field-literal" "ID" "type/Integer"]
+                     :special_type nil}
+                    {:name         "PRICE"
+                     :display_name "Price"
+                     :base_type    "type/Integer"
+                     :table_id     card-virtual-table-id
+                     :id           ["field-literal" "PRICE" "type/Integer"]
+                     :special_type nil}
+                    {:name         "LATITUDE"
+                     :display_name "Latitude"
+                     :base_type    "type/Float"
+                     :table_id     card-virtual-table-id
+                     :id           ["field-literal" "LATITUDE" "type/Float"]
+                     :special_type nil}]})
+  (do
+    ;; run the Card which will populate its result_metadata column
+    ((user->client :crowberto) :post 200 (format "card/%d/query" (u/get-id card)))
+
+    ;; Now fetch the metadata for this "table"
+    ((user->client :crowberto) :get 200 (format "table/card__%d/query_metadata" (u/get-id card)))))
+
+;; make sure GET /api/table/:id/fks just returns nothing for 'virtual' tables
+(expect
+  []
+  ((user->client :crowberto) :get 200 "table/card__1000/fks"))

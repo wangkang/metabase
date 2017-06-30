@@ -331,17 +331,25 @@ var Query = {
         return Array.isArray(field) && mbqlEq(field[0], "aggregation");
     },
 
+    // field literal has the formal ["field-literal", <field-name>, <field-base-type>]
+    isFieldLiteral(field) {
+        return Array.isArray(field) && field.length === 3 && mbqlEq(field[0], "field-literal") && _.isString(field[1]) && _.isString(field[2]);
+    },
+
     isValidField(field) {
         return (
             (Query.isRegularField(field)) ||
             (Query.isLocalField(field)) ||
             (Query.isForeignKeyField(field) && Query.isRegularField(field[1]) && Query.isRegularField(field[2])) ||
+            // datetime field can  be either 4-item (deprecated): ["datetime-field", <field>, "as", <unit>]
+            // or 3 item (preferred style): ["datetime-field", <field>, <unit>]
             (Query.isDatetimeField(field)   && Query.isValidField(field[1]) &&
                 (field.length === 4 ?
                     (field[2] === "as" && typeof field[3] === "string") : // deprecated
                     typeof field[2] === "string")) ||
             (Query.isExpressionField(field) && _.isString(field[1])) ||
-            (Query.isAggregateField(field)  && typeof field[1] === "number")
+            (Query.isAggregateField(field)  && typeof field[1] === "number") ||
+            Query.isFieldLiteral(field)
         );
     },
 
@@ -363,6 +371,8 @@ var Query = {
             return Query.getFieldTargetId(field[2]);
         } else if (Query.isDatetimeField(field)) {
             return Query.getFieldTargetId(field[1]);
+        } else if (Query.isFieldLiteral(field)) {
+            return field;
         }
         console.warn("Unknown field type: ", field);
     },
@@ -390,7 +400,7 @@ var Query = {
                 // TODO: we need to do something better here because filtering depends on knowing a sensible type for the field
                 base_type: TYPE.Integer,
                 operators_lookup: {},
-                valid_operators: [],
+                operators: [],
                 active: true,
                 fk_target_field_id: null,
                 parent_id: null,
@@ -399,14 +409,16 @@ var Query = {
                 target: null,
                 visibility_type: "normal"
             };
-            fieldDef.valid_operators = getOperators(fieldDef, tableDef);
-            fieldDef.operators_lookup = createLookupByProperty(fieldDef.valid_operators, "name");
+            fieldDef.operators = getOperators(fieldDef, tableDef);
+            fieldDef.operators_lookup = createLookupByProperty(fieldDef.operators, "name");
 
             return {
                 table: tableDef,
                 field: fieldDef,
                 path: path
-            }
+            };
+        } else if (Query.isFieldLiteral(field)) {
+            return { table: tableDef, field: Table.getField(tableDef, field), path }; // just pretend it's a normal field
         }
 
         console.warn("Unknown field type: ", field);

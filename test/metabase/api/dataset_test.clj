@@ -1,16 +1,15 @@
 (ns metabase.api.dataset-test
   "Unit tests for /api/dataset endpoints."
-  (:require [clojure.string :as s]
-            [expectations :refer :all]
-            [toucan.db :as db]
+  (:require [expectations :refer :all]
+            [medley.core :as m]
             [metabase.api.dataset :refer [default-query-constraints]]
-            (metabase.models [card :refer [Card]]
-                             [query-execution :refer [QueryExecution]])
+            [metabase.models.query-execution :refer [QueryExecution]]
             [metabase.query-processor.expand :as ql]
+            [metabase.test
+             [data :refer :all]
+             [util :as tu]]
             [metabase.test.data.users :refer :all]
-            [metabase.test.data :refer :all]
-            [metabase.test.util :as tu]))
-
+            [toucan.db :as db]))
 
 (defn user-details [user]
   (tu/match-$ user
@@ -38,7 +37,7 @@
                    [k (f v)]))))))
 
 (defn format-response [m]
-  (into {} (for [[k v] m]
+  (into {} (for [[k v] (m/dissoc-in m [:data :results_metadata])]
              (cond
                (contains? #{:id :started_at :running_time :hash} k) [k (boolean v)]
                (= :data k) [k (if-not (contains? v :native_form)

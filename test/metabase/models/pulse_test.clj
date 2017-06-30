@@ -1,18 +1,19 @@
 (ns metabase.models.pulse-test
   (:require [expectations :refer :all]
             [medley.core :as m]
-            (toucan [db :as db]
-                    [hydrate :refer [hydrate]])
-            [toucan.util.test :as tt]
-            (metabase.models [card :refer [Card]]
-                             [pulse :refer :all]
-                             [pulse-card :refer :all]
-                             [pulse-channel :refer :all]
-                             [pulse-channel-recipient :refer :all])
+            [metabase.models
+             [card :refer [Card]]
+             [pulse :refer :all]
+             [pulse-card :refer :all]
+             [pulse-channel :refer :all]
+             [pulse-channel-recipient :refer :all]]
             [metabase.test.data :refer :all]
             [metabase.test.data.users :refer :all]
-            [metabase.test.util :as tu]
-            [metabase.util :as u]))
+            [metabase.util :as u]
+            [toucan
+             [db :as db]
+             [hydrate :refer [hydrate]]]
+            [toucan.util.test :as tt]))
 
 (defn- user-details
   [username]
@@ -182,3 +183,13 @@
                                                   :recipients    [{:email "foo@bar.com"}
                                                                   {:id (user->id :crowberto)}]}]
                                 :skip-if-empty? false})))
+
+;; make sure fetching a Pulse doesn't return any archived cards
+(expect
+  1
+  (tt/with-temp* [Pulse     [pulse]
+                  Card      [card-1 {:archived true}]
+                  Card      [card-2]
+                  PulseCard [_ {:pulse_id (u/get-id pulse), :card_id (u/get-id card-1), :position 0}]
+                  PulseCard [_ {:pulse_id (u/get-id pulse), :card_id (u/get-id card-2), :position 1}]]
+    (count (:cards (retrieve-pulse (u/get-id pulse))))))

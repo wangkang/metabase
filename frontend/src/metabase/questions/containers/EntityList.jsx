@@ -6,7 +6,7 @@ import { connect } from "react-redux";
 
 import EmptyState from "metabase/components/EmptyState";
 import LoadingAndErrorWrapper from "metabase/components/LoadingAndErrorWrapper";
-import FilterWidget from "metabase/components/FilterWidget"
+import ListFilterWidget from "metabase/components/ListFilterWidget"
 
 import S from "../components/List.css";
 
@@ -175,11 +175,13 @@ export default class EntityList extends Component {
 
         const section = this.getSection();
 
+
         const hasEntitiesInPlainState = entityIds.length > 0 || section.section !== "all";
 
         const showActionHeader = (editable && selectedCount > 0);
         const showSearchHeader = (hasEntitiesInPlainState && showSearchWidget);
         const showEntityFilterWidget = onChangeSection;
+
         return (
             <div style={style}>
                 { (showActionHeader || showSearchHeader || showEntityFilterWidget) &&
@@ -205,7 +207,7 @@ export default class EntityList extends Component {
                             null
                       }
                       { showEntityFilterWidget && hasEntitiesInPlainState &&
-                          <FilterWidget
+                          <ListFilterWidget
                               items={SECTIONS.filter(item => item.id !== "archived")}
                               activeItem={section}
                               onChange={(item) => onChangeSection(item.id)}

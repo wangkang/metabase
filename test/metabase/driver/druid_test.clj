@@ -1,15 +1,18 @@
 (ns metabase.driver.druid-test
   (:require [cheshire.core :as json]
-            [expectations :refer :all]
-            [toucan.util.test :as tt]
+            [expectations :refer [expect]]
+            [medley.core :as m]
+            [metabase
+             [driver :as driver]
+             [query-processor :as qp]
+             [query-processor-test :refer [rows rows+column-names]]
+             [timeseries-query-processor-test :as timeseries-qp-test]
+             [util :as u]]
             [metabase.models.metric :refer [Metric]]
-            [metabase.query-processor :as qp]
             [metabase.query-processor.expand :as ql]
-            [metabase.query-processor-test :refer [rows rows+column-names]]
             [metabase.test.data :as data]
-            [metabase.test.data.datasets :as datasets, :refer [expect-with-engine]]
-            [metabase.timeseries-query-processor-test :as timeseries-qp-test]
-            [metabase.util :as u]))
+            [metabase.test.data.datasets :as datasets :refer [expect-with-engine]]
+            [toucan.util.test :as tt]))
 
 (def ^:const ^:private ^String native-query-1
   (json/generate-string
@@ -27,9 +30,10 @@
 (defn- process-native-query [query]
   (datasets/with-engine :druid
     (timeseries-qp-test/with-flattened-dbdef
-      (qp/process-query {:native   {:query query}
-                         :type     :native
-                         :database (data/id)}))))
+      (-> (qp/process-query {:native   {:query query}
+                             :type     :native
+                             :database (data/id)})
+          (m/dissoc-in [:data :results_metadata])))))
 
 ;; test druid native queries
 (expect-with-engine :druid
@@ -38,12 +42,12 @@
    :data      {:columns     ["timestamp" "id" "user_name" "venue_price" "venue_name" "count"]
                :rows        [["2013-01-03T08:00:00.000Z" "931" "Simcha Yan" "1" "Kinaree Thai Bistro"       1]
                              ["2013-01-10T08:00:00.000Z" "285" "Kfir Caj"   "2" "Ruen Pair Thai Restaurant" 1]]
-               :cols        [{:name "timestamp",   :base_type :type/Text}
-                             {:name "id",          :base_type :type/Text}
-                             {:name "user_name",   :base_type :type/Text}
-                             {:name "venue_price", :base_type :type/Text}
-                             {:name "venue_name",  :base_type :type/Text}
-                             {:name "count",       :base_type :type/Integer}]
+               :cols        [{:name "timestamp",   :display_name "Timestamp",   :base_type :type/Text}
+                             {:name "id",          :display_name "ID",          :base_type :type/Text}
+                             {:name "user_name",   :display_name "User Name",   :base_type :type/Text}
+                             {:name "venue_price", :display_name "Venue Price", :base_type :type/Text}
+                             {:name "venue_name",  :display_name "Venue Name",  :base_type :type/Text}
+                             {:name "count",       :display_name "Count",       :base_type :type/Integer}]
                :native_form {:query native-query-1}}}
   (process-native-query native-query-1))
 
@@ -246,3 +250,21 @@
                :query    {:source-table (data/id :checkins)
                           :aggregation  [:+ ["METRIC" (u/get-id metric)] 1]
                           :breakout     [(ql/breakout (ql/field-id (data/id :checkins :venue_price)))]}})))))
+
+(expect
+  #"com.jcraft.jsch.JSchException:"
+  (try
+    (let [engine :druid
+      details {:ssl false,
+               :password "changeme",
+               :tunnel-host "localhost",
+               :tunnel-pass "BOGUS-BOGUS",
+               :port 5432,
+               :dbname "test",
+               :host "http://localhost",
+               :tunnel-enabled true,
+               :tunnel-port 22,
+               :tunnel-user "bogus"}]
+      (driver/can-connect-with-details? engine details :rethrow-exceptions))
+       (catch Exception e
+         (.getMessage e))))

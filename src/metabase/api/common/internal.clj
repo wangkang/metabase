@@ -5,10 +5,9 @@
             [clojure.string :as str]
             [clojure.tools.logging :as log]
             [medley.core :as m]
-            [schema.core :as s]
-            metabase.logger
             [metabase.util :as u]
-            [metabase.util.schema :as su])
+            [metabase.util.schema :as su]
+            [schema.core :as s])
   (:import java.sql.SQLException))
 
 ;;; +------------------------------------------------------------------------------------------------------------------------+
@@ -72,7 +71,8 @@
   "Generate a documentation string for a `defendpoint` route."
   [method route docstr args param->schema body]
   (format-route-dox (endpoint-name method route)
-                    (str docstr (when (contains? (set body) '(check-superuser))
+                    (str docstr (when (or (contains? (set body) '(check-superuser))
+                                          (contains? (set body) '(api/check-superuser)))
                                   "\n\nYou must be a superuser to do this."))
                     (merge (args-form-symbols args)
                            param->schema)))
@@ -112,12 +112,10 @@
 
     (arg-type :id) -> :int"
   [arg]
-  (-> auto-parse-arg-name-patterns
-      ((fn [[[pattern type] & rest-patterns]]
-         (or (when (re-find pattern (name arg))
-               type)
-             (when rest-patterns
-               (recur rest-patterns)))))))
+  (some (fn [[pattern type]]
+          (when (re-find pattern (name arg))
+            type))
+        auto-parse-arg-name-patterns))
 
 
 ;;; ## TYPIFY-ROUTE

@@ -70,6 +70,10 @@ Start the frontend build process with
 
     yarn run build-hot
 
+Caveat - Yarn does not properly support `build-hot` on Windows 8/10. You will need to manually build the frontend client with
+    
+    yarn run build
+
 This will get you a full development server running on port :3000 by default.
 
 
@@ -116,7 +120,11 @@ Run the linters and type checker with
 
 #### End-to-end tests
 
-End-to-end tests are written with [webschauffeur](https://github.com/metabase/webchauffeur) which is a wrapper around [`selenium-webdriver`](https://www.npmjs.com/package/selenium-webdriver).
+End-to-end tests are written with [webschauffeur](https://github.com/metabase/webchauffeur) which is a wrapper around [`selenium-webdriver`](https://www.npmjs.com/package/selenium-webdriver). 
+
+Generate the Metabase jar file which is used in E2E tests:
+
+    ./bin/build
 
 Run E2E tests once with
 
@@ -178,9 +186,8 @@ Start up an instant cheatsheet for the project + dependencies by running
 
     lein instant-cheatsheet
 
-
 ## License
 
-Copyright © 2016 Metabase, Inc
+Copyright © 2017 Metabase, Inc
 
 Distributed under the terms of the GNU Affero General Public License (AGPL) except as otherwise noted.  See individual files for details.

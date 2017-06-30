@@ -7,10 +7,12 @@ import OnClickOutsideWrapper from "metabase/components/OnClickOutsideWrapper";
 
 import { getModeActions } from "metabase/qb/lib/modes";
 
+import MetabaseAnalytics from "metabase/lib/analytics";
+
 import cx from "classnames";
 import _ from "underscore";
 
-import type { Card } from "metabase/meta/types/Card";
+import type { Card, UnsavedCard} from "metabase/meta/types/Card";
 import type { QueryMode, ClickAction } from "metabase/meta/types/Visualization";
 import type { TableMetadata } from "metabase/meta/types/Metadata";
 
@@ -19,15 +21,22 @@ type Props = {
     mode: QueryMode,
     card: Card,
     tableMetadata: TableMetadata,
-    setCardAndRun: (card: Card) => void
+    navigateToNewCardInsideQB: any => void
+};
+
+type State = {
+    isVisible: boolean,
+    isOpen: boolean,
+    selectedActionIndex: ?number
 };
 
 const CIRCLE_SIZE = 48;
 const NEEDLE_SIZE = 20;
 const POPOVER_WIDTH = 350;
 
-export default class ActionsWidget extends Component<*, Props, *> {
-    state = {
+export default class ActionsWidget extends Component {
+    props: Props;
+    state: State = {
         isVisible: false,
         isOpen: false,
         selectedActionIndex: null
@@ -60,11 +69,19 @@ export default class ActionsWidget extends Component<*, Props, *> {
     };
 
     toggle = () => {
+        if (!this.state.isOpen) {
+            MetabaseAnalytics.trackEvent("Actions", "Opened Action Menu");
+        }
         this.setState({
             isOpen: !this.state.isOpen,
             selectedActionIndex: null
         });
     };
+
+    handleOnChangeCardAndRun = ({ nextCard }: { nextCard: Card|UnsavedCard}) => {
+        const { card: previousCard } = this.props;
+        this.props.navigateToNewCardInsideQB({ nextCard, previousCard });
+    }
 
     handleActionClick = (index: number) => {
         const { mode, card, tableMetadata } = this.props;
@@ -72,9 +89,10 @@ export default class ActionsWidget extends Component<*, Props, *> {
         if (action && action.popover) {
             this.setState({ selectedActionIndex: index });
         } else if (action && action.card) {
-            const card = action.card();
-            if (card) {
-                this.props.setCardAndRun(card);
+            const nextCard = action.card();
+            if (nextCard) {
+                MetabaseAnalytics.trackEvent("Actions", "Executed Action", `${action.section||""}:${action.name||""}`);
+                this.handleOnChangeCardAndRun({ nextCard });
             }
             this.close();
         }
@@ -118,7 +136,10 @@ export default class ActionsWidget extends Component<*, Props, *> {
                     />
                 </div>
                 {isOpen &&
-                    <OnClickOutsideWrapper handleDismissal={this.close}>
+                    <OnClickOutsideWrapper handleDismissal={() => {
+                        MetabaseAnalytics.trackEvent("Actions", "Dismissed Action Menu");
+                        this.close();
+                    }}>
                         <div
                             className="absolute bg-white rounded bordered shadowed py1"
                             style={{
@@ -147,9 +168,12 @@ export default class ActionsWidget extends Component<*, Props, *> {
                                           </div>
                                       </div>
                                       <PopoverComponent
-                                          onChangeCardAndRun={(card) => {
-                                              if (card) {
-                                                  this.props.setCardAndRun(card);
+                                          onChangeCardAndRun={({ nextCard }) => {
+                                              if (nextCard) {
+                                                  if (selectedAction) {
+                                                      MetabaseAnalytics.trackEvent("Actions", "Executed Action", `${selectedAction.section||""}:${selectedAction.name||""}`);
+                                                  }
+                                                  this.handleOnChangeCardAndRun({ nextCard })
                                               }
                                           }}
                                           onClose={this.close}

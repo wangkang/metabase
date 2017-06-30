@@ -1,16 +1,15 @@
 (ns metabase.test.data.presto
   (:require [clojure.string :as s]
             [environ.core :refer [env]]
-            (honeysql [core :as hsql]
-                      [helpers :as h])
+            [honeysql
+             [core :as hsql]
+             [helpers :as h]]
             [metabase.driver.generic-sql.util.unprepare :as unprepare]
             [metabase.test.data.interface :as i]
             [metabase.test.util :refer [resolve-private-vars]]
-            [metabase.util :as u]
-            [metabase.util.honeysql-extensions :as hx])
+            [metabase.util :as u])
   (:import java.util.Date
-           metabase.driver.presto.PrestoDriver
-           (metabase.query_processor.interface DateTimeValue Value)))
+           metabase.driver.presto.PrestoDriver))
 
 (resolve-private-vars metabase.driver.presto execute-presto-query! presto-type->base-type quote-name quote+combine-names)
 
@@ -22,7 +21,7 @@
                                  (s/upper-case (s/replace (name env-var) #"-" "_")))))))
 
 
-;;; IDatasetLoader implementation
+;;; IDriverTestExtensions implementation
 
 (defn- database->connection-details [context {:keys [database-name]}]
   (merge {:host (get-env-var :host)
@@ -93,11 +92,11 @@
         (execute-presto-query! details (insert-sql dbdef tabledef batch))))))
 
 
-;;; IDatasetLoader implementation
+;;; IDriverTestExtensions implementation
 
 (u/strict-extend PrestoDriver
-  i/IDatasetLoader
-  (merge i/IDatasetLoaderDefaultsMixin
+  i/IDriverTestExtensions
+  (merge i/IDriverTestExtensionsDefaultsMixin
          {:engine                             (constantly :presto)
           :database->connection-details       (u/drop-first-arg database->connection-details)
           :create-db!                         (u/drop-first-arg create-db!)

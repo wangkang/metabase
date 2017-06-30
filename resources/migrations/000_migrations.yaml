@@ -3021,7 +3021,7 @@ databaseChangeLog:
             columnNames: group_id, object
         ############################################################ Tweaks to metabase_table ############################################################
         # Modify the length of metabase_table.schema from 256 -> 254
-        # It turns out MySQL InnoDB indecies have to be 767 bytes or less (at least for older versions of MySQL)
+        # It turns out MySQL InnoDB indices have to be 767 bytes or less (at least for older versions of MySQL)
         # and 'utf8' text columns can use up to 3 bytes per character in MySQL -- see http://stackoverflow.com/a/22515986/1198455
         # So 256 * 3 = 768 bytes (too large to index / add unique constraints)
         # Drop this to 254; 254 * 3 = 762, which should give us room to index it along with a 4-byte integer as well if need be
@@ -3323,7 +3323,7 @@ databaseChangeLog:
       id: 49
       author: camsaul
       changes:
-        ######################################## Card public_uuid & indecies ########################################
+        ######################################## Card public_uuid & indices ########################################
         - addColumn:
             tableName: report_card
             columns:
@@ -3346,7 +3346,7 @@ databaseChangeLog:
             columns:
               column:
                 name: public_uuid
-        ######################################## Dashboard public_uuid & indecies ########################################
+        ######################################## Dashboard public_uuid & indices ########################################
         - addColumn:
             tableName: report_dashboard
             columns:
@@ -3570,14 +3570,103 @@ databaseChangeLog:
   - changeSet:
       id: 54
       author: tlrobinson
+      validCheckSum: '7:695b12a78e897c62c21d41bfb04ab44b'
+      validCheckSum: '7:0857800db71a4757e7202aad4eaed48d'
       changes:
         - addColumn:
             tableName: pulse
-            remarks: 'Skip a scheduled Pulse if none of its questions have any results'
             columns:
               - column:
                   name: skip_if_empty
                   type: boolean
+                  remarks: 'Skip a scheduled Pulse if none of its questions have any results'
                   defaultValueBoolean: false
                   constraints:
                     nullable: false
+  - changeSet:
+      id: 55
+      author: camsaul
+      changes:
+        - addColumn:
+            tableName: report_dashboard
+            columns:
+              - column:
+                  name: archived
+                  type: boolean
+                  remarks: 'Is this Dashboard archived (effectively treated as deleted?)'
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+              - column:
+                  name: position
+                  type: integer
+                  remarks: 'The position this Dashboard should appear in the Dashboards list, lower-numbered positions appearing before higher numbered ones.'
+        - createTable:
+            tableName: dashboard_favorite
+            remarks: 'Presence of a row here indicates a given User has favorited a given Dashboard.'
+            columns:
+              - column:
+                  name: id
+                  type: int
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: user_id
+                  type: int
+                  remarks: 'ID of the User who favorited the Dashboard.'
+                  constraints:
+                    nullable: false
+                    references: core_user(id)
+                    foreignKeyName: fk_dashboard_favorite_user_id
+                    deleteCascade: true
+              - column:
+                  name: dashboard_id
+                  type: int
+                  remarks: 'ID of the Dashboard favorited by the User.'
+                  constraints:
+                    nullable: false
+                    references: report_dashboard(id)
+                    foreignKeyName: fk_dashboard_favorite_dashboard_id
+                    deleteCascade: true
+        - addUniqueConstraint:
+            tableName: dashboard_favorite
+            columnNames: user_id, dashboard_id
+            constraintName: unique_dashboard_favorite_user_id_dashboard_id
+        - createIndex:
+            tableName: dashboard_favorite
+            indexName: idx_dashboard_favorite_user_id
+            columns:
+              - column:
+                  name: user_id
+        - createIndex:
+            tableName: dashboard_favorite
+            indexName: idx_dashboard_favorite_dashboard_id
+            columns:
+              - column:
+                  name: dashboard_id
+  - changeSet:
+      id: 56
+      author: wwwiiilll
+      changes:
+        - addColumn:
+            tableName: core_user
+            columns:
+              - column:
+                  name: ldap_auth
+                  type: boolean
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+  - changeSet:
+      id: 57
+      author: camsaul
+      changes:
+        - addColumn:
+            tableName: report_card
+            columns:
+              - column:
+                  name: result_metadata
+                  type: text
+                  remarks: 'Serialized JSON containing metadata about the result columns from running the query.'

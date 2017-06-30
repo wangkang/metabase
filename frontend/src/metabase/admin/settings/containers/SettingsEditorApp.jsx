@@ -11,13 +11,15 @@ import AdminLayout from "metabase/components/AdminLayout.jsx";
 import SettingsSetting from "../components/SettingsSetting.jsx";
 import SettingsEmailForm from "../components/SettingsEmailForm.jsx";
 import SettingsSlackForm from "../components/SettingsSlackForm.jsx";
+import SettingsLdapForm from "../components/SettingsLdapForm.jsx";
 import SettingsSetupList from "../components/SettingsSetupList.jsx";
 import SettingsUpdatesForm from "../components/SettingsUpdatesForm.jsx";
 import SettingsSingleSignOnForm from "../components/SettingsSingleSignOnForm.jsx";
 
+import { prepareAnalyticsValue } from 'metabase/admin/settings/utils'
+
 import _ from "underscore";
 import cx from 'classnames';
-
 
 import {
     getSettings,
@@ -51,6 +53,7 @@ export default class SettingsEditorApp extends Component {
         updateSetting: PropTypes.func.isRequired,
         updateEmailSettings: PropTypes.func.isRequired,
         updateSlackSettings: PropTypes.func.isRequired,
+        updateLdapSettings: PropTypes.func.isRequired,
         sendTestEmail: PropTypes.func.isRequired
     };
 
@@ -82,8 +85,16 @@ export default class SettingsEditorApp extends Component {
             }
 
             this.refs.layout.setSaved();
-            let val = (setting.key === "report-timezone" || setting.type === "boolean") ? setting.value : "success";
-            MetabaseAnalytics.trackEvent("General Settings", setting.display_name || setting.key, val);
+
+            const value = prepareAnalyticsValue(setting);
+
+            MetabaseAnalytics.trackEvent(
+                "General Settings",
+                setting.display_name || setting.key,
+                value,
+                // pass the actual value if it's a number
+                typeof(value) === 'number' && value
+            );
         } catch (error) {
             let message = error && (error.message || (error.data && error.data.message));
             this.refs.layout.setSaveError(message);
@@ -136,8 +147,14 @@ export default class SettingsEditorApp extends Component {
                     updateSetting={this.updateSetting}
                 />
             );
+        } else if (activeSection.name === "LDAP") {
+            return (
+                <SettingsLdapForm
+                    elements={activeSection.settings}
+                    updateLdapSettings={this.props.updateLdapSettings}
+                />
+            );
         } else {
-
             return (
                 <ul>
                     {activeSection.settings

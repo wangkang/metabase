@@ -1,23 +1,26 @@
 (ns metabase.driver.mongo-test
   "Tests for Mongo driver."
-  (:require [clojure.walk :as walk]
-            [expectations :refer :all]
-            [toucan.db :as db]
-            [metabase.driver :as driver]
-            (metabase.models [database :refer [Database]]
-                             [field :refer [Field]]
-                             [field-values :refer [FieldValues]]
-                             [table :refer [Table] :as table])
-            [metabase.query-processor :as qp]
+  (:require [expectations :refer :all]
+            [medley.core :as m]
+            [metabase
+             [driver :as driver]
+             [query-processor :as qp]
+             [query-processor-test :refer [rows]]]
+            [metabase.models
+             [field :refer [Field]]
+             [field-values :refer [FieldValues]]
+             [table :as table :refer [Table]]]
             [metabase.query-processor.expand :as ql]
-            [metabase.query-processor-test :refer [rows]]
-            [metabase.test.data :as data]
-            [metabase.test.data.datasets :as datasets]
-            [metabase.test.data.interface :as i]
-            [metabase.test.util :as tu])
-  (:import org.bson.types.ObjectId
-           org.joda.time.DateTime
-           metabase.driver.mongo.MongoDriver))
+            [metabase.test
+             [data :as data]
+             [util :as tu]]
+            [metabase.test.data
+             [datasets :as datasets]
+             [interface :as i]]
+            [toucan.db :as db])
+  (:import metabase.driver.mongo.MongoDriver
+           org.bson.types.ObjectId
+           org.joda.time.DateTime))
 
 ;; ## Constants + Helper Fns/Macros
 ;; TODO - move these to metabase.test-data ?
@@ -75,13 +78,14 @@
    :row_count 1
    :data      {:rows        [[1]]
                :columns     ["count"]
-               :cols        [{:name "count", :base_type :type/Integer}]
+               :cols        [{:name "count", :display_name "Count", :base_type :type/Integer}]
                :native_form {:collection "venues"
                              :query      native-query}}}
-  (qp/process-query {:native   {:query      native-query
-                                :collection "venues"}
-                     :type     :native
-                     :database (data/id)}))
+  (-> (qp/process-query {:native   {:query      native-query
+                                    :collection "venues"}
+                         :type     :native
+                         :database (data/id)})
+      (m/dissoc-in [:data :results_metadata])))
 
 ;; ## Tests for individual syncing functions
 
@@ -186,6 +190,11 @@
 (expect
   "[{\"$match\":{\"entityId\":{\"$eq\":[\"___ObjectId\", \"583327789137b2700a1621fb\"]}}}]"
   (encode-fncalls "[{\"$match\":{\"entityId\":{\"$eq\":ObjectId(\"583327789137b2700a1621fb\")}}}]"))
+
+;; make sure fn calls with no arguments work as well (#4996)
+(expect
+  "[{\"$match\":{\"date\":{\"$eq\":[\"___ISODate\"]}}}]"
+  (encode-fncalls "[{\"$match\":{\"date\":{\"$eq\":ISODate()}}}]"))
 
 (expect
   (DateTime. "2012-01-01")

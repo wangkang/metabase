@@ -1,11 +1,11 @@
 (ns metabase.query-processor-test.aggregation-test
   "Tests for MBQL aggregations."
-  (:require [expectations :refer :all]
+  (:require [metabase
+             [query-processor-test :refer :all]
+             [util :as u]]
             [metabase.query-processor.expand :as ql]
-            [metabase.query-processor-test :refer :all]
             [metabase.test.data :as data]
-            [metabase.test.data.datasets :as datasets]
-            [metabase.util :as u]))
+            [metabase.test.data.datasets :as datasets]))
 
 ;;; ------------------------------------------------------------ "COUNT" AGGREGATION ------------------------------------------------------------
 
@@ -153,7 +153,7 @@
 (datasets/expect-with-engines (disj non-timeseries-engines :mongo :bigquery :presto)
   [(aggregate-col :count)
    (assoc (aggregate-col :count)
-     :display_name    "count_2"
+     :display_name    "Count 2"
      :name            "count_2"
      :preview_display true)]
   (-> (data/run-query venues
